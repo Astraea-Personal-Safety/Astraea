@@ -17,6 +17,7 @@ import './SOSButton.css';
 export default function SOSButton() {
   const {
     isSOSActive,
+    isCovertAlertActive,
     sosReason,
     triggerSOS,
     standDownSOS,
@@ -180,7 +181,7 @@ export default function SOSButton() {
       </div>
 
       {/* 2. Active Emergency Modal & Direct Emergency Dispatch Panel */}
-      {isSOSActive && (
+      {isSOSActive && !isCovertAlertActive && (
         <div className="emergency-modal-overlay" id="emergency-active-modal">
           <div className="emergency-card">
             {/* Header */}

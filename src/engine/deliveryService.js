@@ -302,9 +302,9 @@ export function dispatchEmergencyToCircle({
 
   activeContacts.forEach((contact, idx) => {
     const contactId = contact.id || `contact-${idx}`;
-    const baseDelay = idx * 200;
+    const baseDelay = idx * 100;
 
-    // Stage 1: ACCEPTED immediately
+    // Stage 1: ACCEPTED
     setTimeout(() => {
       onContactStatusUpdate({
         contactId,
@@ -314,7 +314,7 @@ export function dispatchEmergencyToCircle({
         updatedAt: Date.now(),
         statusText: 'Dispatch request accepted by local gateway'
       });
-    }, 100 + baseDelay);
+    }, 50 + baseDelay);
 
     // Stage 2: QUEUED
     setTimeout(() => {
@@ -324,11 +324,11 @@ export function dispatchEmergencyToCircle({
         phone: contact.phone,
         stage: DELIVERY_STAGES.QUEUED,
         updatedAt: Date.now(),
-        statusText: 'Payload encrypted and queued for telecom routing'
+        statusText: 'Payload assembled & queued for emergency dispatch'
       });
-    }, 700 + baseDelay);
+    }, 400 + baseDelay);
 
-    // Stage 3: SENT
+    // Stage 3: SENT (transmitted to configured channels or armed for one-tap dial)
     setTimeout(() => {
       onContactStatusUpdate({
         contactId,
@@ -336,33 +336,9 @@ export function dispatchEmergencyToCircle({
         phone: contact.phone,
         stage: DELIVERY_STAGES.SENT,
         updatedAt: Date.now(),
-        statusText: `Transmitted via SMS gateway to ${contact.phone || 'device'}`
+        statusText: `Dispatched to contact (${contact.phone || 'device'}) • Awaiting recipient acknowledgement`
       });
-    }, 1500 + baseDelay);
-
-    // Stage 4: DELIVERED
-    setTimeout(() => {
-      onContactStatusUpdate({
-        contactId,
-        contactName: contact.name,
-        phone: contact.phone,
-        stage: DELIVERY_STAGES.DELIVERED,
-        updatedAt: Date.now(),
-        statusText: 'Handset delivery receipt confirmed by carrier'
-      });
-    }, 2800 + baseDelay);
-
-    // Stage 5: ACKNOWLEDGED (Simulated contact read receipt)
-    setTimeout(() => {
-      onContactStatusUpdate({
-        contactId,
-        contactName: contact.name,
-        phone: contact.phone,
-        stage: DELIVERY_STAGES.ACKNOWLEDGED,
-        updatedAt: Date.now(),
-        statusText: 'Alert viewed & acknowledged by recipient'
-      });
-    }, 5000 + baseDelay);
+    }, 1000 + baseDelay);
   });
 
   return trackingRecords;

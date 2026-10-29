@@ -243,6 +243,9 @@ export const storage = {
       localStorage.removeItem(STORAGE_KEYS.PRIVACY_SETTINGS);
       localStorage.removeItem(STORAGE_KEYS.SAFETY_TIMELINE);
       localStorage.removeItem(STORAGE_KEYS.WEBHOOK_URL);
+      localStorage.removeItem(STORAGE_KEYS.TELEGRAM_CONFIG);
+      localStorage.removeItem(STORAGE_KEYS.WHATSAPP_CONFIG);
+      localStorage.removeItem(STORAGE_KEYS.GEMINI_API_KEY);
     } catch {}
   }
 };

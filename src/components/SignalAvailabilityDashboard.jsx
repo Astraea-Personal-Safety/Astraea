@@ -15,7 +15,6 @@ export default function SignalAvailabilityDashboard() {
     deviceMotionSignal,
     audioDistressSignal,
     networkSignal,
-    weatherSignal,
     speechEngine,
     familiarPlaces
   } = useApp();
@@ -505,42 +504,6 @@ export default function SignalAvailabilityDashboard() {
               </span>
             </div>
           </div>
-        </div>
-
-        {/* 9. Live Environmental Weather API (Open-Meteo REST) */}
-        <div className="sensor-tile tile-active">
-          <div className="sensor-tile-top">
-            <div className="sensor-name-wrap">
-              <span className="sensor-icon">🌤️</span>
-              <div>
-                <h5>Environmental Weather API</h5>
-                <span className="sensor-tech">api.open-meteo.com/v1/forecast (REST)</span>
-              </div>
-            </div>
-            <span className={`status-pill ${weatherSignal.isAdverseWeather ? 'pill-fallback' : 'pill-active'}`}>
-              {weatherSignal.loading ? '○ FETCHING...' : weatherSignal.isAdverseWeather ? '⚠️ HAZARDOUS' : '● REAL REST API'}
-            </span>
-          </div>
-
-          <div className="sensor-readings-row">
-            <div className="reading-col">
-              <span className="reading-label">Live Condition</span>
-              <span className="reading-val font-mono">{weatherSignal.condition}</span>
-            </div>
-            <div className="reading-col">
-              <span className="reading-label">Temperature</span>
-              <span className="reading-val font-mono">{weatherSignal.temperature !== null ? `${weatherSignal.temperature}°C` : '24°C'}</span>
-            </div>
-            <div className="reading-col">
-              <span className="reading-label">Visibility</span>
-              <span className="reading-val font-mono">{(weatherSignal.visibilityMeters / 1000).toFixed(1)} km</span>
-            </div>
-          </div>
-          {weatherSignal.hazardDescription && (
-            <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: '#f59e0b', fontWeight: 600 }}>
-              ⚠️ Hazard: {weatherSignal.hazardDescription} (+{weatherSignal.hazardPoints} risk pts)
-            </div>
-          )}
         </div>
 
       </div>

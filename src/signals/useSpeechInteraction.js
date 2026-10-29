@@ -1,13 +1,75 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
+ * Normalizes speech/input phrase for robust matching:
+ * - Lowercase
+ * - Strips punctuation and accents/special characters
+ * - Collapses consecutive spaces
+ */
+export function normalizePhrase(text) {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]|_/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Computes Levenshtein distance between two normalized strings.
+ */
+export function levenshteinDistance(s1, s2) {
+  const m = s1.length;
+  const n = s2.length;
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (s1[i - 1] === s2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+  return dp[m][n];
+}
+
+/**
+ * Matches candidate phrase against a target safe/duress phrase.
+ * Supports exact word matching and 1-edit fuzzy tolerance for speech recognition variations.
+ */
+export function matchPhrase(candidate, target) {
+  const normCandidate = normalizePhrase(candidate);
+  const normTarget = normalizePhrase(target);
+  if (!normCandidate || !normTarget) return false;
+  if (normCandidate === normTarget) return true;
+
+  const candidateWords = normCandidate.split(' ');
+  const targetWords = normTarget.split(' ');
+
+  // If candidate is a sentence containing target as consecutive words
+  if (candidateWords.length >= targetWords.length) {
+    for (let i = 0; i <= candidateWords.length - targetWords.length; i++) {
+      const windowStr = candidateWords.slice(i, i + targetWords.length).join(' ');
+      if (windowStr === normTarget) return true;
+      if (normTarget.length >= 5 && levenshteinDistance(windowStr, normTarget) <= 1) {
+        return true;
+      }
+    }
+  }
+
+  // Small fuzzy tolerance on the whole phrase if lengths are very close
+  if (Math.abs(normCandidate.length - normTarget.length) <= 2 && normTarget.length >= 5) {
+    if (levenshteinDistance(normCandidate, normTarget) <= 1) return true;
+  }
+
+  return false;
+}
+
+/**
  * Astraea - Web Speech API Hook (TTS Voice Check-ins + STT Voice Commands & Emergency Trigger)
- * 
- * Capabilities:
- * 1. Speech Synthesis (TTS): Discreet spoken check-in prompts ("Astraea check-in: Are you safe?").
- * 2. Voice-Triggered SOS: Hands-free detection of configured phrases ("Astraea help me", "Code Red").
- * 3. Natural-Language Safety Commands: "Start journey", "I'm safe", "Status report".
- * 4. Safe Phrase Verification: Stand down check-in by speaking your secret phrase.
  */
 export function useSpeechInteraction({
   safeWord = '',
@@ -15,6 +77,7 @@ export function useSpeechInteraction({
   voiceSosPhrase = 'ASTRAEA HELP ME',
   isCheckInActive = false,
   ttsEnabled = true,
+  sttEnabled = true,
   onVoiceSOS = () => {},
   onSubmitCheckIn = () => {},
   onStartJourney = () => {},
@@ -92,16 +155,16 @@ export function useSpeechInteraction({
 
   // Command & Phrase Interpreter
   const processSpokenPhrase = useCallback((spokenText) => {
+    if (!sttEnabled) return;
+
     const clean = spokenText.trim().toUpperCase();
     setTranscript(clean);
 
-    const safeTarget = (safeWord || '').trim().toUpperCase();
-    const duressTarget = (duressWord || '').trim().toUpperCase();
     const sosTarget = (voiceSosPhrase || 'ASTRAEA HELP ME').trim().toUpperCase();
 
-    // 1. Voice-Triggered SOS Hotphrase Check
+    // 1. Voice-Triggered SOS Hotphrase Check (always checks emergency triggers first)
     if (
-      clean.includes(sosTarget) ||
+      matchPhrase(clean, sosTarget) ||
       clean.includes('ASTRAEA HELP') ||
       clean.includes('CODE RED') ||
       clean.includes('EMERGENCY SOS')
@@ -114,16 +177,22 @@ export function useSpeechInteraction({
 
     // 2. Active Check-In Stand-Down / Duress Verification
     if (isCheckInActive) {
-      if (safeTarget && clean.includes(safeTarget)) {
+      if (safeWord && matchPhrase(clean, safeWord)) {
         setRecognizedCommand({ type: 'SAFE_STANDDOWN', text: clean });
-        speakText('Safe word verified. Alert stood down.');
-        onSubmitCheckIn(safeWord);
+        onSubmitCheckIn(clean);
         return;
       }
-      if (duressTarget && clean.includes(duressTarget)) {
+      if (duressWord && matchPhrase(clean, duressWord)) {
         setRecognizedCommand({ type: 'DURESS_TRIGGER', text: clean });
-        // Anti-coercion: silently escalate to SOS
-        onVoiceSOS('coercion_wrong_word');
+        onSubmitCheckIn(clean);
+        return;
+      }
+
+      // If speech is recognized during active check-in but does NOT match safe or duress word:
+      // Escalate immediately (same as typed mismatch) to protect against coercion / silence
+      if (clean.length >= 3) {
+        setRecognizedCommand({ type: 'CHECKIN_MISMATCH', text: clean });
+        onSubmitCheckIn(clean);
         return;
       }
     }
@@ -158,6 +227,7 @@ export function useSpeechInteraction({
 
     setRecognizedCommand({ type: 'UNRECOGNIZED', text: clean });
   }, [
+    sttEnabled,
     safeWord,
     duressWord,
     voiceSosPhrase,
@@ -172,7 +242,7 @@ export function useSpeechInteraction({
 
   // Speech Recognition Controller
   const startListening = useCallback(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !sttEnabled) return;
 
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRec) {
@@ -197,6 +267,11 @@ export function useSpeechInteraction({
       };
 
       recognition.onresult = (event) => {
+        // Prevent echo: ignore spoken results while speech synthesis TTS is speaking
+        if (isSpeakingRef.current || (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking)) {
+          return;
+        }
+
         let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const res = event.results[i];
@@ -217,8 +292,7 @@ export function useSpeechInteraction({
       };
 
       recognition.onend = () => {
-        if (shouldListenRef.current) {
-          // Restart for continuous background hotphrase listening
+        if (shouldListenRef.current && sttEnabled) {
           try {
             recognition.start();
           } catch {
@@ -235,7 +309,7 @@ export function useSpeechInteraction({
       setSpeechError(err.message);
       setIsListening(false);
     }
-  }, [processSpokenPhrase]);
+  }, [sttEnabled, processSpokenPhrase]);
 
   const stopListening = useCallback(() => {
     shouldListenRef.current = false;

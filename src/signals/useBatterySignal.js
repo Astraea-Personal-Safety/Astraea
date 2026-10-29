@@ -28,6 +28,7 @@ export function useBatterySignal(manualLevel = 95, manualDropType = 'none') {
   useEffect(() => {
     let batteryObj = null;
     let isMounted = true;
+    let batteryUpdateHandler = null;
 
     async function initBattery() {
       // Feature detection: Check if navigator.getBattery is available
@@ -83,6 +84,8 @@ export function useBatterySignal(manualLevel = 95, manualDropType = 'none') {
           });
         };
 
+        batteryUpdateHandler = updateBattery;
+
         // Initial read
         updateBattery();
 
@@ -106,10 +109,10 @@ export function useBatterySignal(manualLevel = 95, manualDropType = 'none') {
 
     return () => {
       isMounted = false;
-      if (batteryObj) {
+      if (batteryObj && batteryUpdateHandler) {
         try {
-          batteryObj.removeEventListener('levelchange', () => {});
-          batteryObj.removeEventListener('chargingchange', () => {});
+          batteryObj.removeEventListener('levelchange', batteryUpdateHandler);
+          batteryObj.removeEventListener('chargingchange', batteryUpdateHandler);
         } catch {
           // ignore cleanup errors
         }

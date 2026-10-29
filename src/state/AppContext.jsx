@@ -10,8 +10,7 @@ import { useGeolocationSignals } from '../signals/useGeolocationSignals';
 import { useDeviceMotionSignal } from '../signals/useDeviceMotionSignal';
 import { useAudioDistressSignal } from '../signals/useAudioDistressSignal';
 import { useNetworkSignal } from '../signals/useNetworkSignal';
-import { useSpeechInteraction } from '../signals/useSpeechInteraction';
-import { useEnvironmentalWeatherSignal } from '../signals/useEnvironmentalWeatherSignal';
+import { useSpeechInteraction, matchPhrase } from '../signals/useSpeechInteraction';
 import { explainRiskAssessment, interpretSafetyCommand, fetchGeminiSafetyAnalysis } from '../engine/aiReasoning';
 import { buildEmergencyPayload, dispatchEmergencyToCircle, sendBrowserNotification } from '../engine/deliveryService';
 import { sirenSynth } from '../engine/sirenSynth';
@@ -90,7 +89,6 @@ export function AppProvider({ children }) {
   const deviceMotionSignal = useDeviceMotionSignal({ enabled: privacySettings.motionSensorEnabled });
   const audioDistressSignal = useAudioDistressSignal({ enabled: privacySettings.micDistressEnabled });
   const networkSignal = useNetworkSignal();
-  const weatherSignal = useEnvironmentalWeatherSignal(geoSignals.coordinates);
 
   // 5. Live Journey State
   const [journey, setJourney] = useState({
@@ -105,6 +103,7 @@ export function AppProvider({ children }) {
 
   // 7. Emergency SOS State
   const [isSOSActive, setIsSOSActive] = useState(false);
+  const [isCovertAlertActive, setIsCovertAlertActive] = useState(false);
   const [sosReason, setSosReason] = useState(null);
   const [sosTriggeredAt, setSosTriggeredAt] = useState(null);
   const [emergencyPayload, setEmergencyPayload] = useState(null);
@@ -114,6 +113,14 @@ export function AppProvider({ children }) {
   const [currentAttempt, setCurrentAttempt] = useState(1);
   const [countdown, setCountdown] = useState(CHECKIN_RESPONSE_WINDOW_SECONDS);
   const [checkInFeedback, setCheckInFeedback] = useState(null);
+  const checkInCooldownUntilRef = useRef(0);
+
+  // Dev & Manual override mode
+  const isDevMode = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('dev') === '1';
+  }, []);
+  const [manualOverrideMode, setManualOverrideMode] = useState(false);
 
   const lastUpdatedRef = useRef(0);
   const prevScoreRef = useRef(0);
@@ -147,29 +154,34 @@ export function AppProvider({ children }) {
 
   // Compute effective composite signals combining real sensors and fallback simulation
   const effectiveSignals = useMemo(() => {
+    const override = manualOverrideMode || isDevMode;
     return {
-      // Pace: Real GPS speed if active, else manual fallback
-      pace: geoSignals.isGeolocationActive ? geoSignals.pace : manualSignals.pace,
+      // Pace: dev/manual override if active, else real GPS if active, else manual fallback
+      pace: override ? manualSignals.pace : (geoSignals.isGeolocationActive ? geoSignals.pace : manualSignals.pace),
       
-      // Stillness: Real GPS stillness if active, else manual fallback
-      stillnessSeconds: geoSignals.isGeolocationActive ? geoSignals.stillnessSeconds : manualSignals.stillnessSeconds,
+      // Stillness: dev/manual override if active, else real GPS stillness if active, else manual fallback
+      stillnessSeconds: override ? manualSignals.stillnessSeconds : (geoSignals.isGeolocationActive ? geoSignals.stillnessSeconds : manualSignals.stillnessSeconds),
       
       // Crowd Density: Manual simulation
       crowdDensity: manualSignals.crowdDensity,
       
-      // Time of Day: Fully real from browser clock
-      timeOfDay: timeSignal.timeOfDay,
+      // Time of Day: dev/manual override if provided, else real browser clock
+      timeOfDay: override ? (manualSignals.timeOfDay || timeSignal.timeOfDay) : timeSignal.timeOfDay,
       
-      // Route Familiarity: Real GPS distance to saved places if GPS active & places exist, else manual
-      routeFamiliarity: (geoSignals.isGeolocationActive && familiarPlaces.length > 0)
-        ? geoSignals.routeFamiliarity
-        : manualSignals.routeFamiliarity,
+      // Route Familiarity: dev/manual override if active, else real GPS distance to saved places
+      routeFamiliarity: override
+        ? manualSignals.routeFamiliarity
+        : ((geoSignals.isGeolocationActive && familiarPlaces.length > 0) ? geoSignals.routeFamiliarity : manualSignals.routeFamiliarity),
       
-      // Battery Level: Real battery if supported, else manual
-      batteryLevel: batterySignal.isBatterySupported ? batterySignal.batteryLevel : manualSignals.batteryLevel,
+      // Battery Level: dev/manual override if active, else real battery
+      batteryLevel: override
+        ? manualSignals.batteryLevel
+        : (batterySignal.isBatterySupported ? batterySignal.batteryLevel : manualSignals.batteryLevel),
       
-      // Battery Drop Type: Real battery anomaly if supported, else manual
-      batteryDropType: batterySignal.isBatterySupported ? batterySignal.batteryDropType : manualSignals.batteryDropType,
+      // Battery Drop Type: dev/manual override if active, else real battery anomaly
+      batteryDropType: override
+        ? manualSignals.batteryDropType
+        : (batterySignal.isBatterySupported ? batterySignal.batteryDropType : manualSignals.batteryDropType),
       
       // Real Hardware Sensor: Acoustic Distress Detection (Web Audio API)
       distressAudio: audioDistressSignal.distressDetected || manualSignals.distressAudio,
@@ -184,6 +196,8 @@ export function AppProvider({ children }) {
       journeyShareActive: journey.isActive
     };
   }, [
+    manualOverrideMode,
+    isDevMode,
     geoSignals.isGeolocationActive,
     geoSignals.pace,
     geoSignals.stillnessSeconds,
@@ -263,30 +277,36 @@ export function AppProvider({ children }) {
   }, [effectiveSignals, riskAssessment]);
 
   // UNIFIED SOS TRIGGER ACTION
-  const triggerSOS = useCallback((reason = 'manual') => {
+  const triggerSOS = useCallback((reason = 'manual', { silent = false } = {}) => {
     setIsSOSActive(true);
+    setIsCovertAlertActive(silent);
     setSosReason(reason);
     const now = Date.now();
     setSosTriggeredAt(now);
-    setIsCriticalFlash(true);
-    setTimeout(() => setIsCriticalFlash(false), 1500);
+
+    if (!silent) {
+      setIsCriticalFlash(true);
+      setTimeout(() => setIsCriticalFlash(false), 1500);
+    }
 
     setCheckInState('idle');
     setCheckInFeedback(null);
 
-    // Audible emergency siren alarm
-    if (privacySettings.audibleSiren) {
+    // Audible emergency siren alarm (loud path only)
+    if (privacySettings.audibleSiren && !silent) {
       sirenSynth.startSiren({ volume: 0.5 });
     }
 
-    // Tactical haptics
-    if (privacySettings.hapticsEnabled && typeof navigator !== 'undefined' && navigator.vibrate) {
+    // Tactical haptics (loud path only)
+    if (privacySettings.hapticsEnabled && !silent && typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([300, 100, 300, 100, 500]);
     }
 
     let reasonText = 'Manual Emergency SOS Activated';
     if (reason === 'coercion_wrong_word') {
       reasonText = 'CRITICAL ALERT: Potential coercion/duress detected (non-matching safe word or duress phrase)';
+    } else if (reason === 'coercion_duress_word') {
+      reasonText = 'CRITICAL ALERT: Covert duress phrase spoken or entered by user';
     } else if (reason === 'silence_timeout') {
       reasonText = 'CRITICAL ALERT: Emergency response window expired after 3 unanswered check-ins';
     } else if (reason === 'voice_trigger') {
@@ -300,7 +320,7 @@ export function AppProvider({ children }) {
       tier: 'CRITICAL',
       contributingFactors: [
         reasonText,
-        'Simulated alert broadcast to Trusted Circle & Emergency Links Armed',
+        silent ? 'Covert silent emergency dispatch active' : 'Alert broadcast to Trusted Circle & Emergency Links Armed',
         'Strict safe-word stand-down required'
       ]
     });
@@ -341,29 +361,34 @@ export function AppProvider({ children }) {
     // Log timeline event
     addTimelineEvent({
       category: 'SOS',
-      title: '🚨 Emergency SOS Triggered',
+      title: silent ? '⚠️ Covert Emergency Alert Dispatched' : '🚨 Emergency SOS Triggered',
       description: reasonText,
-      details: { reason, location: geoSignals.currentAddress || 'GPS Coordinates' }
+      details: { reason, location: geoSignals.currentAddress || 'GPS Coordinates', silent }
     });
 
-    if (mode === 'Connected') {
-      const names = getCircleNames();
-      dispatchCircleNotification(`🚨 EMERGENCY SOS DISPATCH: Notifying ${names} — Immediate assistance requested`, 'alert');
-    } else {
-      dispatchCircleNotification(`🚨 LOCAL SOS ARMED: Solo Mode active (Local emergency links ready)`, 'alert');
+    if (!silent) {
+      if (mode === 'Connected') {
+        const names = getCircleNames();
+        dispatchCircleNotification(`🚨 EMERGENCY SOS DISPATCH: Notifying ${names} — Immediate assistance requested`, 'alert');
+      } else {
+        dispatchCircleNotification(`🚨 LOCAL SOS ARMED: Solo Mode active (Local emergency links ready)`, 'alert');
+      }
     }
-  }, [privacySettings, geoSignals, mode, trustedCircle, webhookUrl, getCircleNames, dispatchCircleNotification, addTimelineEvent]);
+  }, [privacySettings, geoSignals, mode, trustedCircle, webhookUrl, telegramConfig, whatsappConfig, getCircleNames, dispatchCircleNotification, addTimelineEvent]);
 
   // Stand down SOS
   const standDownSOS = useCallback((enteredWord) => {
     if (!safeWord) return false;
-    const isMatch = enteredWord.trim().toUpperCase() === safeWord.trim().toUpperCase();
+    const isMatch = matchPhrase(enteredWord, safeWord);
 
     if (isMatch) {
       setIsSOSActive(false);
+      setIsCovertAlertActive(false);
       setSosReason(null);
       setSosTriggeredAt(null);
       sirenSynth.stopSiren();
+      setManualOverrideMode(false);
+      checkInCooldownUntilRef.current = Date.now() + 120000; // 2 min cooldown to prevent instant re-trigger
       setManualSignals({
         ...DEFAULT_SIGNALS,
         distressAudio: false,
@@ -389,7 +414,10 @@ export function AppProvider({ children }) {
         dispatchCircleNotification(`✅ STAND-DOWN: Notifying ${names} — Safe word confirmed. Alert resolved.`, 'success');
       }
 
-      setTimeout(() => setCheckInFeedback(null), 5000);
+      setTimeout(() => {
+        setCheckInState('idle');
+        setCheckInFeedback(null);
+      }, 4000);
       return true;
     }
     return false;
@@ -399,23 +427,36 @@ export function AppProvider({ children }) {
   const submitCheckIn = useCallback((inputText) => {
     const trimmedInput = inputText.trim();
 
-    // Check for explicit duress word first
-    if (duressWord && trimmedInput.toUpperCase() === duressWord.trim().toUpperCase()) {
+    // 1. Covert Duress Word Verification
+    if (duressWord && matchPhrase(trimmedInput, duressWord)) {
+      lastUpdatedRef.current = Date.now();
+      setCheckInState('resolved');
+      setCheckInFeedback({ type: 'success', message: 'Safe word verified • Alert stood down' });
+      checkInCooldownUntilRef.current = Date.now() + 120000;
+
       addTimelineEvent({
         category: 'SOS',
-        title: '⚠️ Duress Word Triggered',
-        description: 'User entered covert duress phrase. Silently escalating to SOS.'
+        title: '⚠️ Covert Duress Phrase Activated',
+        description: 'User entered covert duress phrase. Normal safe confirmation shown while emergency dispatch is silently triggered.'
       });
-      triggerSOS('coercion_wrong_word');
-      return { success: false, reason: 'duress' };
+
+      // Silent covert emergency dispatch without siren or loud modal
+      triggerSOS('coercion_duress_word', { silent: true });
+
+      setTimeout(() => {
+        setCheckInState('idle');
+        setCheckInFeedback(null);
+      }, 4000);
+      return { success: true, covert: true };
     }
 
-    // Exact Safe Word Verification
-    if (safeWord && trimmedInput.toUpperCase() === safeWord.trim().toUpperCase()) {
+    // 2. Safe Word Verification
+    if (safeWord && matchPhrase(trimmedInput, safeWord)) {
       lastUpdatedRef.current = Date.now();
       prevScoreRef.current = 0;
       prevTierRef.current = 'LOW';
       setPreviousScore(0);
+      setManualOverrideMode(false);
       setManualSignals({
         ...DEFAULT_SIGNALS,
         distressAudio: false,
@@ -424,6 +465,7 @@ export function AppProvider({ children }) {
       });
       setCheckInState('resolved');
       setCheckInFeedback({ type: 'success', message: 'Safe word verified • Alert stood down' });
+      checkInCooldownUntilRef.current = Date.now() + 120000;
 
       addTimelineEvent({
         category: 'CHECKIN',
@@ -443,8 +485,8 @@ export function AppProvider({ children }) {
       return { success: true };
     }
 
-    // Wrong word -> Anti-coercion instant SOS
-    triggerSOS('coercion_wrong_word');
+    // 3. Mismatched Word -> Anti-coercion silent escalation
+    triggerSOS('coercion_wrong_word', { silent: true });
     return { success: false, reason: 'coercion' };
   }, [duressWord, safeWord, mode, journey.isActive, getCircleNames, dispatchCircleNotification, triggerSOS, addTimelineEvent]);
 
@@ -489,10 +531,11 @@ export function AppProvider({ children }) {
     safeWord,
     duressWord,
     voiceSosPhrase,
-    isCheckInActive: checkInState === 'prompting',
+    isCheckInActive: checkInState === 'prompting' || checkInState === 'waiting_retry',
     ttsEnabled: privacySettings.ttsVoiceEnabled,
-    onVoiceSOS: (reason) => triggerSOS(reason),
-    onSubmitCheckIn: (word) => submitCheckIn(word),
+    sttEnabled: privacySettings.sttVoiceCommandsEnabled,
+    onVoiceSOS: (reason) => triggerSOS(reason, { silent: reason === 'coercion_wrong_word' }),
+    onSubmitCheckIn: (phrase) => submitCheckIn(phrase),
     onStartJourney: (lbl) => startJourney(lbl),
     onEndJourney: () => endJourney(),
     onStatusRequest: () => {
@@ -646,7 +689,10 @@ export function AppProvider({ children }) {
     }
 
     // Check-in trigger condition: crosses into ELEVATED or above, OR journey anomaly detected
+    const isCooldownActive = Date.now() < checkInCooldownUntilRef.current;
     const shouldCheckIn = (
+      !isCooldownActive &&
+      !isSOSActive &&
       (result.tier === 'ELEVATED' || result.tier === 'HIGH' || result.tier === 'CRITICAL' || geoSignals.journeyAnomaly) &&
       checkInState === 'idle'
     );
@@ -755,15 +801,19 @@ export function AppProvider({ children }) {
 
   // Update a single manual signal
   const updateSignal = useCallback((key, value) => {
+    setManualOverrideMode(true);
     setManualSignals(prev => ({ ...prev, [key]: value }));
   }, []);
 
   const updateSignals = useCallback((partial) => {
+    setManualOverrideMode(true);
     setManualSignals(prev => ({ ...prev, ...partial }));
   }, []);
 
   const resetToSafeBaseline = useCallback(() => {
     if (isSOSActive) return;
+    setManualOverrideMode(false);
+    checkInCooldownUntilRef.current = Date.now() + 120000;
     lastUpdatedRef.current = Date.now();
     prevScoreRef.current = 0;
     prevTierRef.current = 'LOW';
@@ -808,7 +858,6 @@ export function AppProvider({ children }) {
     deviceMotionSignal,
     audioDistressSignal,
     networkSignal,
-    weatherSignal,
     speechEngine,
     signalSourcesMeta,
 
@@ -856,6 +905,8 @@ export function AppProvider({ children }) {
     // 7. Telemetry & Scoring
     signals: effectiveSignals,
     manualSignals,
+    isDevMode,
+    manualOverrideMode,
     updateSignal,
     updateSignals,
     resetToSafeBaseline,
@@ -865,6 +916,7 @@ export function AppProvider({ children }) {
 
     // 8. Emergency SOS & Siren
     isSOSActive,
+    isCovertAlertActive,
     sosReason,
     sosTriggeredAt,
     triggerSOS,
