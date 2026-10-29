@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../state/useApp';
+import { useScreenWakeLock } from '../signals/useScreenWakeLock';
+import { URGENT_TRIGGERS, UNCERTAIN_TRIGGERS } from '../signals/voiceTriggers';
 import './VoiceAssistantBar.css';
 
 export default function VoiceAssistantBar() {
@@ -7,28 +9,21 @@ export default function VoiceAssistantBar() {
     speechEngine,
     privacySettings,
     voiceSosPhrase,
-    triggerSOS,
-    startJourney,
-    endJourney,
-    riskAssessment,
-    explainAssessment
+    triggerSafetyCheckIn
   } = useApp();
 
-  const [assistantResponse, setAssistantResponse] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { isLocked: isWakeLockActive, isSupported: isWakeLockSupported } = useScreenWakeLock({
+    enabled: speechEngine.isListening
+  });
+
+  const [selectedLanguage, setSelectedLanguage] = useState('All'); // 'All' | 'English' | 'Hindi'
 
   if (!privacySettings.sttVoiceCommandsEnabled && !privacySettings.ttsVoiceEnabled) {
     return null;
   }
 
-  const handleCommandClick = (cmdText) => {
-    setIsProcessing(true);
-    setAssistantResponse(`Executing: "${cmdText}"`);
-
-    setTimeout(() => {
-      speechEngine.simulateVoiceCommand(cmdText);
-      setIsProcessing(false);
-    }, 400);
+  const handleSimulateTrigger = (phrase) => {
+    speechEngine.simulateVoiceCommand(phrase);
   };
 
   return (
@@ -37,8 +32,8 @@ export default function VoiceAssistantBar() {
         <div className="voice-title-group">
           <span className="voice-mic-icon">🎙️</span>
           <div>
-            <span className="voice-bar-title">Natural Voice Guardian</span>
-            <span className="voice-subtext">Hands-free commands & voice check-in</span>
+            <span className="voice-bar-title">Multi-Language Voice Sentinel</span>
+            <span className="voice-subtext">Hands-free English & Hindi triggers</span>
           </div>
         </div>
 
@@ -51,59 +46,81 @@ export default function VoiceAssistantBar() {
               title={speechEngine.isListening ? 'Stop voice recognition' : 'Start hands-free voice recognition'}
             >
               <span className="voice-pulse-ring" />
-              <span>{speechEngine.isListening ? 'Listening...' : 'Enable Voice'}</span>
+              <span>{speechEngine.isListening ? '● Listening' : 'Enable Mic'}</span>
             </button>
           ) : (
-            <span className="voice-unsupported-tag">Voice Command Ready (Tap)</span>
+            <span className="voice-unsupported-tag">Voice Tap Ready</span>
           )}
         </div>
       </div>
 
-      {/* Hotphrase Status Strip */}
-      <div className="voice-hotphrase-strip">
-        <span className="hotphrase-badge">EMERGENCY HOTPHRASE:</span>
-        <span className="hotphrase-text">"{voiceSosPhrase || 'ASTRAEA HELP ME'}"</span>
-        <span className="hotphrase-hint">(Spoken trigger arms SOS immediately)</span>
+      {/* Screen Wake Lock Status Strip */}
+      <div className="wake-lock-status-row">
+        <span className={`wake-lock-dot ${isWakeLockActive ? 'active' : ''}`} />
+        <span className="wake-lock-text">
+          {isWakeLockActive
+            ? 'Screen Wake Lock Active (Display stays on hands-free)'
+            : 'Screen Wake Lock Standby (Starts when listening)'}
+        </span>
       </div>
 
       {/* Real-time transcript or last recognized command */}
       {speechEngine.transcript && (
         <div className="voice-live-transcript">
-          <span className="transcript-label">Recognized Speech:</span>
+          <span className="transcript-label">Heard Speech:</span>
           <span className="transcript-content">"{speechEngine.transcript}"</span>
         </div>
       )}
 
-      {/* Spoken command shortcut chips */}
-      <div className="voice-command-chips">
-        <button
-          type="button"
-          className="cmd-chip"
-          onClick={() => handleCommandClick('Start walk')}
-        >
-          🚶 "Start walk"
-        </button>
-        <button
-          type="button"
-          className="cmd-chip"
-          onClick={() => handleCommandClick('What is my risk score?')}
-        >
-          🛡️ "Am I safe?"
-        </button>
-        <button
-          type="button"
-          className="cmd-chip"
-          onClick={() => handleCommandClick('I arrived safely')}
-        >
-          🏠 "I arrived"
-        </button>
-        <button
-          type="button"
-          className="cmd-chip cmd-chip-emergency"
-          onClick={() => handleCommandClick(voiceSosPhrase || 'Astraea help me')}
-        >
-          🚨 "{voiceSosPhrase || 'Astraea help me'}"
-        </button>
+      {/* Voice Trigger Simulation Suite for Judges & Demos */}
+      <div className="voice-trigger-suite">
+        <div className="trigger-suite-header">
+          <span className="suite-title">⚡ Voice Trigger Presets (Click to Test)</span>
+          <div className="lang-filter-pills">
+            {['All', 'English', 'Hindi'].map(lang => (
+              <button
+                key={lang}
+                type="button"
+                className={`pill-btn ${selectedLanguage === lang ? 'active' : ''}`}
+                onClick={() => setSelectedLanguage(lang)}
+              >
+                {lang}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="voice-trigger-chips-grid">
+          {/* Urgent Triggers -> Silent Escalation */}
+          {URGENT_TRIGGERS
+            .filter(t => selectedLanguage === 'All' || t.lang === selectedLanguage || (selectedLanguage === 'Hindi' && t.lang === 'Hinglish'))
+            .map(t => (
+              <button
+                key={t.phrase}
+                type="button"
+                className="cmd-chip cmd-chip-urgent"
+                onClick={() => handleSimulateTrigger(t.phrase)}
+                title={`Urgent trigger: Silently escalates to emergency (${t.lang})`}
+              >
+                🚨 "{t.phrase}" <span className="chip-lang-tag">[{t.lang}]</span>
+              </button>
+            ))}
+
+          {/* Unease Triggers -> Initiates Voice Check-In */}
+          {UNCERTAIN_TRIGGERS
+            .filter(t => selectedLanguage === 'All' || t.lang === selectedLanguage || (selectedLanguage === 'Hindi' && t.lang === 'Hinglish'))
+            .map(t => (
+              <button
+                key={t.phrase}
+                type="button"
+                className="cmd-chip cmd-chip-checkin"
+                onClick={() => handleSimulateTrigger(t.phrase)}
+                title={`Unease trigger: Initiates voice check-in prompt (${t.lang})`}
+              >
+                🛡️ "{t.phrase}" <span className="chip-lang-tag">[{t.lang}]</span>
+              </button>
+            ))}
+        </div>
       </div>
     </div>
   );

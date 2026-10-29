@@ -1,175 +1,208 @@
 .voice-assistant-bar-shell {
-  background: var(--bg-card);
-  border: 1px solid var(--border-glass);
-  border-radius: 16px;
-  padding: 14px 16px;
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  background: var(--bg-card, #111827);
+  border: 1px solid var(--border-color, #1f2937);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .voice-bar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 0.75rem;
 }
 
 .voice-title-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.6rem;
 }
 
 .voice-mic-icon {
-  font-size: 1.3rem;
-  background: #eff6ff;
-  border-radius: 10px;
-  padding: 4px;
+  font-size: 1.4rem;
 }
 
 .voice-bar-title {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--text-highlight);
   display: block;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #f9fafb;
 }
 
 .voice-subtext {
-  font-size: 0.72rem;
-  color: var(--text-muted);
+  display: block;
+  font-size: 0.75rem;
+  color: #9ca3af;
 }
 
 .btn-voice-listen {
-  position: relative;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: var(--text-main);
-  padding: 6px 14px;
-  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #1f2937;
+  color: #9ca3af;
+  border: 1px solid #374151;
+  border-radius: 9999px;
+  padding: 0.4rem 0.9rem;
   font-size: 0.8rem;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.btn-voice-listen:hover {
-  background: #e2e8f0;
-}
-
 .btn-voice-listen.listening {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #1d4ed8;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
 }
 
 .voice-pulse-ring {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #64748b;
+  background: currentColor;
 }
 
 .btn-voice-listen.listening .voice-pulse-ring {
-  background: #2563eb;
-  animation: livePulse 1s infinite;
+  animation: pulse-dot 1.5s infinite;
 }
 
-.voice-unsupported-tag {
+@keyframes pulse-dot {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.4); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+/* Wake Lock Strip */
+.wake-lock-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.72rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  padding: 4px 8px;
-  border-radius: 6px;
-  color: var(--text-muted);
+  color: #9ca3af;
+  margin-bottom: 0.75rem;
 }
 
-/* Hotphrase Strip */
-.voice-hotphrase-strip {
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+.wake-lock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4b5563;
 }
 
-.hotphrase-badge {
-  font-weight: 800;
-  color: #dc2626;
-  font-size: 0.7rem;
+.wake-lock-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
 }
 
-.hotphrase-text {
-  font-weight: 700;
-  color: var(--text-highlight);
-  font-family: var(--font-mono);
-}
-
-.hotphrase-hint {
-  color: var(--text-muted);
-  font-size: 0.7rem;
-}
-
-/* Live transcript */
 .voice-live-transcript {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 0.78rem;
-  color: #065f46;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  background: rgba(31, 41, 55, 0.7);
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: #60a5fa;
+  margin-bottom: 0.75rem;
 }
 
 .transcript-label {
-  font-weight: 700;
-}
-
-.transcript-content {
-  font-style: italic;
   font-weight: 600;
+  margin-right: 0.4rem;
+  color: #9ca3af;
 }
 
-/* Command Chips */
-.voice-command-chips {
+/* Trigger Presets Suite */
+.voice-trigger-suite {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.trigger-suite-header {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
   flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.suite-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #d1d5db;
+}
+
+.lang-filter-pills {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.pill-btn {
+  background: transparent;
+  border: 1px solid #374151;
+  border-radius: 9999px;
+  color: #9ca3af;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.55rem;
+  cursor: pointer;
+}
+
+.pill-btn.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.voice-trigger-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .cmd-chip {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: var(--text-main);
-  padding: 5px 10px;
-  border-radius: 8px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 9999px;
+  color: #e5e7eb;
+  padding: 0.35rem 0.75rem;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   transition: all 0.15s ease;
 }
 
 .cmd-chip:hover {
-  background: #ffffff;
-  border-color: #94a3b8;
+  background: #374151;
   transform: translateY(-1px);
 }
 
-.cmd-chip-emergency {
-  border-color: #fca5a5;
-  color: #dc2626;
-  background: #fef2f2;
+.cmd-chip-urgent {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
 }
 
-.cmd-chip-emergency:hover {
-  background: #fee2e2;
-  border-color: #ef4444;
+.cmd-chip-urgent:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.cmd-chip-checkin {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fcd34d;
+}
+
+.cmd-chip-checkin:hover {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.chip-lang-tag {
+  font-size: 0.65rem;
+  opacity: 0.75;
 }

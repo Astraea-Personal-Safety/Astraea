@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { classifyVoiceTrigger } from './voiceTriggers.js';
 
 /**
  * Normalizes speech/input phrase for robust matching:
@@ -80,6 +81,7 @@ export function useSpeechInteraction({
   sttEnabled = true,
   onVoiceSOS = () => {},
   onSubmitCheckIn = () => {},
+  onTriggerCheckIn = () => {},
   onStartJourney = () => {},
   onEndJourney = () => {},
   onStatusRequest = () => {}
@@ -197,7 +199,22 @@ export function useSpeechInteraction({
       }
     }
 
-    // 3. Natural Language Safety Commands
+    // 3. Multi-Language Safety Trigger Classifier (English / Hindi / Hinglish)
+    const classified = classifyVoiceTrigger(clean);
+    if (classified.matched) {
+      if (classified.type === 'URGENT') {
+        setRecognizedCommand({ type: 'SOS_TRIGGER', text: clean, triggerInfo: classified });
+        speakText('Emergency detected. Silently alerting circle.');
+        onVoiceSOS('voice_trigger', { silent: true });
+        return;
+      } else if (classified.type === 'CHECKIN') {
+        setRecognizedCommand({ type: 'CHECKIN_TRIGGER', text: clean, triggerInfo: classified });
+        onTriggerCheckIn();
+        return;
+      }
+    }
+
+    // 4. Natural Language Safety Commands
     if (clean.includes('START JOURNEY') || clean.includes('START WALK') || clean.includes('WALKING HOME')) {
       setRecognizedCommand({ type: 'START_JOURNEY', text: clean });
       speakText('Starting live journey monitoring with your circle.');
@@ -235,6 +252,7 @@ export function useSpeechInteraction({
     speakText,
     onVoiceSOS,
     onSubmitCheckIn,
+    onTriggerCheckIn,
     onStartJourney,
     onEndJourney,
     onStatusRequest

@@ -1,0 +1,228 @@
+.security-vault-panel {
+  background: var(--bg-card, #111827);
+  border: 1px solid var(--border-color, #1f2937);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: #f3f4f6;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.vault-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color, #1f2937);
+  padding-bottom: 0.75rem;
+}
+
+.vault-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vault-icon {
+  font-size: 1.5rem;
+}
+
+.vault-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f9fafb;
+}
+
+.vault-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.vault-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+
+.badge-locked {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-unlocked {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.vault-pin-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 380px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.pin-input-group {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.pin-digit-box {
+  width: 44px;
+  height: 52px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  background: #1f2937;
+  border: 2px solid #374151;
+  border-radius: 0.5rem;
+  color: #60a5fa;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.pin-digit-box:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.vault-error-msg {
+  color: #f87171;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.vault-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.vault-actions-row {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.btn-vault-primary {
+  background: #3b82f6;
+  color: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-vault-primary:hover {
+  background: #2563eb;
+}
+
+.btn-vault-secondary {
+  background: transparent;
+  color: #9ca3af;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  font-weight: 500;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-vault-secondary:hover {
+  background: #1f2937;
+  color: #f3f4f6;
+}
+
+/* Security Delay Banner */
+.security-delay-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.1));
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.delay-banner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.delay-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: #fbbf24;
+  font-size: 0.95rem;
+}
+
+.delay-countdown {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fef3c7;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.375rem;
+}
+
+.delay-banner-desc {
+  font-size: 0.82rem;
+  color: #d1d5db;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.btn-cancel-delay {
+  align-self: flex-start;
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 0.375rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-cancel-delay:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* Location Status Banner */
+.vault-location-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.location-trusted {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.location-untrusted {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}

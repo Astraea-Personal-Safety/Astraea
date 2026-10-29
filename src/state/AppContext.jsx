@@ -526,6 +526,26 @@ export function AppProvider({ children }) {
     dispatchCircleNotification(`🏠 JOURNEY ENDED: Notifying ${names} — Arrived safely`, 'success');
   }, [getCircleNames, dispatchCircleNotification, addTimelineEvent]);
 
+  // Manual or Voice Triggered Check-In
+  const triggerSafetyCheckIn = useCallback((reason = 'Voice safety trigger detected') => {
+    if (isSOSActive || checkInState !== 'idle') return;
+    setCheckInState('prompting');
+    setCurrentAttempt(1);
+    setCountdown(CHECKIN_RESPONSE_WINDOW_SECONDS);
+    if (privacySettings.ttsVoiceEnabled) {
+      speechEngine.speakText('Astraea safety check-in: Are you safe? Speak or type your safe phrase.');
+    }
+    if (privacySettings.hapticsEnabled && typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([100, 50, 100]);
+    }
+    sirenSynth.playAlertChime();
+    addTimelineEvent({
+      category: 'CHECKIN',
+      title: '🛡️ Voice-Triggered Check-In Initiated',
+      description: reason
+    });
+  }, [isSOSActive, checkInState, privacySettings, speechEngine, addTimelineEvent]);
+
   // Speech Engine Integration
   const speechEngine = useSpeechInteraction({
     safeWord,
@@ -534,8 +554,9 @@ export function AppProvider({ children }) {
     isCheckInActive: checkInState === 'prompting' || checkInState === 'waiting_retry',
     ttsEnabled: privacySettings.ttsVoiceEnabled,
     sttEnabled: privacySettings.sttVoiceCommandsEnabled,
-    onVoiceSOS: (reason) => triggerSOS(reason, { silent: reason === 'coercion_wrong_word' }),
+    onVoiceSOS: (reason, opts) => triggerSOS(reason, opts || { silent: reason === 'coercion_wrong_word' }),
     onSubmitCheckIn: (phrase) => submitCheckIn(phrase),
+    onTriggerCheckIn: () => triggerSafetyCheckIn(),
     onStartJourney: (lbl) => startJourney(lbl),
     onEndJourney: () => endJourney(),
     onStatusRequest: () => {
@@ -933,6 +954,7 @@ export function AppProvider({ children }) {
     countdown,
     checkInFeedback,
     submitCheckIn,
+    triggerSafetyCheckIn,
     CHECKIN_MAX_ATTEMPTS,
     CHECKIN_RESPONSE_WINDOW_SECONDS,
     CHECKIN_RETRY_INTERVAL_SECONDS

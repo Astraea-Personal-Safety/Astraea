@@ -9,33 +9,39 @@ import SignalAvailabilityDashboard from './components/SignalAvailabilityDashboar
 import TrustedCircleManager from './components/TrustedCircleManager';
 import EmergencyDeliveryTracker from './components/EmergencyDeliveryTracker';
 import SafetyTimeline from './components/SafetyTimeline';
-import SafePhraseConfig from './components/SafePhraseConfig';
 import PrivacyControls from './components/PrivacyControls';
 import AccessibilityControls from './components/AccessibilityControls';
+import SecurityVault from './components/SecurityVault';
+import VoiceAssistantBar from './components/VoiceAssistantBar';
 import SOSButton from './components/SOSButton';
 import './App.css';
 
 function MainAppContent() {
   const {
     mode,
+    setMode,
+    isDevMode,
     safeWord,
     trustedCircle,
-    familiarPlaces,
+    journey,
+    startJourney,
+    endJourney,
     timeSignal,
     batterySignal,
     geoSignals,
     audioDistressSignal,
-    deviceMotionSignal,
     privacySettings,
-    setShowSettingsModal,
     resetToSafeBaseline,
     updateSignals
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState('shield'); // 'shield' | 'journey' | 'circle' | 'timeline' | 'telemetry' | 'settings'
+  // 4 Bottom Tabs: 'home' | 'contacts' | 'locations' | 'settings'
+  const [activeTab, setActiveTab] = useState('home');
+  const [showDevModal, setShowDevModal] = useState(false);
   const [showQuickPresets, setShowQuickPresets] = useState(false);
+  const [fakeCallTriggered, setFakeCallTriggered] = useState(false);
 
-  // Quick preset scenarios for instant judge testing anywhere in the app
+  // Quick preset scenarios for instant judge testing in ?dev=1
   const DEMO_PRESETS = [
     { label: 'Safe Baseline', icon: '🟢', values: { pace: 'normal', stillnessSeconds: 0, crowdDensity: 'large', routeFamiliarity: 'familiar', batteryLevel: 95, batteryDropType: 'none', distressAudio: false, deviceImpact: false } },
     { label: 'Night Walk', icon: '🌙', values: { pace: 'normal', stillnessSeconds: 0, crowdDensity: 'large', routeFamiliarity: 'familiar', batteryLevel: 80, batteryDropType: 'none', distressAudio: false, deviceImpact: false } },
@@ -46,11 +52,36 @@ function MainAppContent() {
     { label: 'Compound Threat + Battery Drop (Critical)', icon: '🚨', values: { pace: 'running', stillnessSeconds: 0, crowdDensity: 'small', routeFamiliarity: 'unfamiliar', batteryLevel: 8, batteryDropType: 'instant', distressAudio: true, deviceImpact: true } }
   ];
 
+  const handleToggleCircleSharing = () => {
+    setMode(mode === 'Connected' ? 'Solo' : 'Connected');
+  };
+
+  const handleTriggerFakeCall = () => {
+    setFakeCallTriggered(true);
+    setTimeout(() => {
+      alert('📞 Incoming Call from "Mom": Astraea escape call simulation active.');
+      setFakeCallTriggered(false);
+    }, 1500);
+  };
+
   return (
     <div className={`app-shell ${privacySettings?.highContrast ? 'high-contrast-mode' : ''}`}>
-      {/* Mobile-Friendly App Container */}
+      {/* Dev Mode Floating Trigger (?dev=1 only) */}
+      {isDevMode && (
+        <button
+          type="button"
+          className="dev-lab-trigger"
+          onClick={() => setShowDevModal(true)}
+          title="Open Developer & Judge Lab"
+        >
+          <span>🧪</span>
+          <span>Dev Tools (?dev=1)</span>
+        </button>
+      )}
+
+      {/* Mobile-First Frame */}
       <div className="app-phone-frame">
-        {/* Top App Header & Live Security Bar */}
+        {/* Top Header */}
         <header className="app-top-header">
           <div className="header-top-row">
             <div className="app-brand-lockup">
@@ -60,30 +91,28 @@ function MainAppContent() {
               </div>
               <div>
                 <h1 className="brand-title">Astraea</h1>
-                <span className="brand-subtitle">Adaptive Real-Time Safety Sentinel</span>
+                <span className="brand-subtitle">Voice-First Autonomous Safety Sentinel</span>
               </div>
             </div>
 
-            <div className="header-actions">
+            {/* Simplified Circle Sharing Toggle */}
+            <div className="circle-sharing-toggle-wrap">
               <button
                 type="button"
-                className={`btn-header-settings ${activeTab === 'settings' ? 'active-settings' : ''}`}
-                onClick={() => setActiveTab('settings')}
-                title="Security, Privacy & Accessibility Settings"
+                className={`circle-toggle-btn ${mode === 'Connected' ? 'sharing-on' : 'sharing-off'}`}
+                onClick={handleToggleCircleSharing}
+                title="Toggle sharing alerts with your trusted emergency circle"
               >
-                <span className="settings-gear">⚙️</span>
-                <span className="settings-text">Settings</span>
+                <span className="toggle-dot" />
+                <span className="toggle-text">
+                  {mode === 'Connected' ? 'Circle Active' : 'Solo Mode'}
+                </span>
               </button>
             </div>
           </div>
 
           {/* Real-Time Live Signal Status Chips */}
           <div className="header-status-strip">
-            <div className="status-chip live-guard-chip">
-              <span className="pulsing-green-dot" />
-              <span>Guard Active ({mode})</span>
-            </div>
-
             <div className="status-chip" title="System Clock Signal">
               <span>{timeSignal.timeOfDay === 'day' ? '☀️' : '🌙'} {timeSignal.formattedTime}</span>
             </div>
@@ -97,214 +126,199 @@ function MainAppContent() {
             </div>
 
             <div className={`status-chip ${audioDistressSignal.permissionStatus === 'granted' ? 'chip-audio-active' : ''}`} title="Acoustic Sentinel">
-              <span>🎧 {audioDistressSignal.permissionStatus === 'granted' ? 'Mic Active' : 'Audio Standby'}</span>
+              <span>🎧 {audioDistressSignal.permissionStatus === 'granted' ? 'Mic Active' : 'Standby'}</span>
             </div>
           </div>
         </header>
 
-        {/* Minimal Onboarding / Safe Word Security Bar */}
+        {/* Minimal Onboarding Setup */}
         <OnboardingSetup />
 
-        {/* Navigation Tabs */}
-        <nav className="app-navigation-tabs">
-          <button
-            type="button"
-            className={`nav-tab-btn ${activeTab === 'shield' ? 'active' : ''}`}
-            onClick={() => setActiveTab('shield')}
-          >
-            <span className="tab-icon">🛡️</span>
-            <span className="tab-title">Guardian</span>
-          </button>
+        {/* Universal Check-In Prompt (Takes priority over all views) */}
+        <CheckInPrompt />
 
-          <button
-            type="button"
-            className={`nav-tab-btn ${activeTab === 'journey' ? 'active' : ''}`}
-            onClick={() => setActiveTab('journey')}
-          >
-            <span className="tab-icon">📍</span>
-            <span className="tab-title">Live Walk</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-tab-btn ${activeTab === 'circle' ? 'active' : ''}`}
-            onClick={() => setActiveTab('circle')}
-          >
-            <span className="tab-icon">👥</span>
-            <span className="tab-title">Circle & Dispatch</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
-            onClick={() => setActiveTab('timeline')}
-          >
-            <span className="tab-icon">📜</span>
-            <span className="tab-title">Timeline</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-tab-btn ${activeTab === 'telemetry' ? 'active' : ''}`}
-            onClick={() => setActiveTab('telemetry')}
-          >
-            <span className="tab-icon">🧪</span>
-            <span className="tab-title">Signal Lab</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-          >
-            <span className="tab-icon">⚙️</span>
-            <span className="tab-title">Privacy</span>
-          </button>
-        </nav>
-
-        {/* Main Content Area */}
+        {/* Main View Area */}
         <main className="app-main-content">
-          {/* Active Check-In & Anti-Coercion Stand-Down Prompt (Universal Priority) */}
-          <CheckInPrompt />
-
-          {/* TAB 1: GUARDIAN SHIELD (Primary Safety Dashboard) */}
-          {activeTab === 'shield' && (
+          {/* TAB 1: HOME (Sentinel, Risk Ring, Voice, Live Walk, SOS) */}
+          {activeTab === 'home' && (
             <div className="tab-view-container animate-fade-in">
+              {/* Central Risk Ring */}
               <RiskDisplay />
 
-              {/* Quick Action Cards in Guardian View */}
-              <div className="guardian-quick-cards">
-                <div className="quick-action-card" onClick={() => setActiveTab('journey')}>
-                  <div className="quick-card-icon">📍</div>
-                  <div className="quick-card-content">
-                    <h4>Live Walk & Map</h4>
-                    <p>Track your live route with Leaflet OpenStreetMap and 500m geofence zones.</p>
-                  </div>
-                  <span className="quick-card-arrow">→</span>
-                </div>
+              {/* Multi-Language Voice Sentinel Bar */}
+              <VoiceAssistantBar />
 
-                <div className="quick-action-card" onClick={() => setActiveTab('circle')}>
-                  <div className="quick-card-icon">📡</div>
-                  <div className="quick-card-content">
-                    <h4>Delivery Pipeline Status</h4>
-                    <p>Track real-time carrier acknowledgment for emergency broadcasts.</p>
+              {/* Live Walk & Journey Quick Action Card */}
+              <div className="home-action-card">
+                <div className="home-action-card-header">
+                  <div className="action-card-title-group">
+                    <span className="action-card-icon">🚶</span>
+                    <div>
+                      <h4 className="action-card-title">Live Walk Journey</h4>
+                      <p className="action-card-subtitle">
+                        {journey.isActive
+                          ? `Monitoring active: "${journey.label}"`
+                          : 'Share route & anomaly alerts with trusted circle'}
+                      </p>
+                    </div>
                   </div>
-                  <span className="quick-card-arrow">→</span>
+                  <button
+                    type="button"
+                    className={`btn-journey-toggle ${journey.isActive ? 'journey-stop' : 'journey-start'}`}
+                    onClick={journey.isActive ? endJourney : () => startJourney('Walking Home')}
+                  >
+                    {journey.isActive ? 'Stop Walk' : 'Start Walk'}
+                  </button>
                 </div>
+              </div>
 
-                <div className="quick-action-card" onClick={() => setActiveTab('settings')}>
-                  <div className="quick-card-icon">🛡️</div>
-                  <div className="quick-card-content">
-                    <h4>Safe Phrase Armed</h4>
-                    <p>{safeWord ? `Active (${safeWord.length} chars) • Duress & Voice trigger ready` : 'Click to configure safe phrase'}</p>
-                  </div>
-                  <span className="quick-card-arrow">⚙️</span>
-                </div>
+              {/* Escape / Fake-Call Button */}
+              <div className="escape-call-row">
+                <button
+                  type="button"
+                  className={`btn-escape-call ${fakeCallTriggered ? 'triggering' : ''}`}
+                  onClick={handleTriggerFakeCall}
+                >
+                  <span>📞</span>
+                  <span>{fakeCallTriggered ? 'Calling your phone...' : 'Simulate Escape Call'}</span>
+                </button>
+                <span className="escape-call-hint">Generates an immediate call to exit uncomfortable situations</span>
               </div>
             </div>
           )}
 
-          {/* TAB 2: LIVE JOURNEY SHARING & MAP */}
-          {activeTab === 'journey' && (
+          {/* TAB 2: CONTACTS (Trusted Circle & Escalation Pipeline) */}
+          {activeTab === 'contacts' && (
             <div className="tab-view-container animate-fade-in">
-              <JourneyShare />
-            </div>
-          )}
-
-          {/* TAB 3: CIRCLE & EMERGENCY DISPATCH STATUS */}
-          {activeTab === 'circle' && (
-            <div className="tab-view-container animate-fade-in circle-zones-view">
               <TrustedCircleManager />
               <EmergencyDeliveryTracker />
             </div>
           )}
 
-          {/* TAB 4: SAFETY TIMELINE & AUDIT LOG */}
-          {activeTab === 'timeline' && (
+          {/* TAB 3: LOCATIONS (Interactive Leaflet Map & Safe Zones) */}
+          {activeTab === 'locations' && (
             <div className="tab-view-container animate-fade-in">
-              <SafetyTimeline />
+              <JourneyShare />
             </div>
           )}
 
-          {/* TAB 5: SIGNAL AVAILABILITY & TELEMETRY LAB */}
-          {activeTab === 'telemetry' && (
-            <div className="tab-view-container animate-fade-in">
-              <SignalAvailabilityDashboard />
-            </div>
-          )}
-
-          {/* TAB 6: SECURITY, PRIVACY & ACCESSIBILITY CONFIG */}
+          {/* TAB 4: SETTINGS (Security Vault, Privacy, Timeline, Accessibility) */}
           {activeTab === 'settings' && (
             <div className="tab-view-container animate-fade-in settings-view-wrapper">
-              <SafePhraseConfig />
+              <SecurityVault />
               <PrivacyControls />
+              <SafetyTimeline />
               <AccessibilityControls />
             </div>
           )}
         </main>
 
-        {/* Floating Quick Scenario Injector for Judges/Evaluation */}
-        <div className="judge-eval-fab-container">
+        {/* Instagram-Style Bottom Navigation Bar */}
+        <nav className="app-bottom-nav">
           <button
             type="button"
-            className={`btn-judge-fab ${showQuickPresets ? 'open' : ''}`}
-            onClick={() => setShowQuickPresets(!showQuickPresets)}
-            title="Open Benchmark Scenario Quick-Injector"
+            className={`bottom-tab-btn ${activeTab === 'home' ? 'active' : ''}`}
+            onClick={() => setActiveTab('home')}
           >
-            <span className="fab-icon">⚡</span>
-            <span className="fab-label">Judge Presets</span>
+            <span className="tab-icon">🛡️</span>
+            <span className="tab-label">Home</span>
+            <span className="tab-indicator" />
           </button>
 
-          {showQuickPresets && (
-            <div className="quick-presets-flyout">
-              <div className="flyout-header">
-                <span className="flyout-title">⚡ Instant Scenario Injector</span>
-                <button
-                  type="button"
-                  className="btn-close-flyout"
-                  onClick={() => setShowQuickPresets(false)}
-                >
-                  ✕
-                </button>
-              </div>
-              <p className="flyout-subtext">Click any preset to test the composite risk scoring engine live:</p>
-              
-              <div className="flyout-buttons">
-                {DEMO_PRESETS.map((p, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="flyout-preset-btn"
-                    onClick={() => {
-                      updateSignals(p.values);
-                      setShowQuickPresets(false);
-                      setActiveTab('shield');
-                    }}
-                  >
-                    <span>{p.icon}</span>
-                    <span>{p.label}</span>
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="flyout-preset-btn reset-flyout-btn"
-                  onClick={() => {
-                    resetToSafeBaseline();
-                    setShowQuickPresets(false);
-                    setActiveTab('shield');
-                  }}
-                >
-                  <span>↺</span>
-                  <span>Reset Safe Baseline</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+          <button
+            type="button"
+            className={`bottom-tab-btn ${activeTab === 'contacts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('contacts')}
+          >
+            <span className="tab-icon">👥</span>
+            <span className="tab-label">Contacts</span>
+            <span className="tab-indicator" />
+          </button>
 
-        {/* Universal Floating Emergency SOS Button & Overlay */}
+          <button
+            type="button"
+            className={`bottom-tab-btn ${activeTab === 'locations' ? 'active' : ''}`}
+            onClick={() => setActiveTab('locations')}
+          >
+            <span className="tab-icon">📍</span>
+            <span className="tab-label">Locations</span>
+            <span className="tab-indicator" />
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            <span className="tab-icon">⚙️</span>
+            <span className="tab-label">Settings</span>
+            <span className="tab-indicator" />
+          </button>
+        </nav>
+
+        {/* Universal Floating SOS Trigger */}
         <SOSButton />
       </div>
+
+      {/* Dev Mode Slide-Over Modal (?dev=1 only) */}
+      {isDevMode && showDevModal && (
+        <div className="dev-modal-overlay animate-fade-in">
+          <div className="dev-modal-card">
+            <div className="dev-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.25rem' }}>🧪</span>
+                <h3 style={{ margin: 0, color: '#f9fafb' }}>Developer & Judge Telemetry Lab</h3>
+              </div>
+              <button
+                type="button"
+                className="btn-close-dev-modal"
+                onClick={() => setShowDevModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="dev-modal-content">
+              {/* Scenario Presets */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h5 style={{ margin: '0 0 0.5rem', color: '#60a5fa' }}>⚡ Quick Benchmark Presets</h5>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {DEMO_PRESETS.map((p, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="flyout-preset-btn"
+                      onClick={() => {
+                        updateSignals(p.values);
+                        setShowDevModal(false);
+                        setActiveTab('home');
+                      }}
+                    >
+                      <span>{p.icon}</span>
+                      <span>{p.label}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="flyout-preset-btn reset-flyout-btn"
+                    onClick={() => {
+                      resetToSafeBaseline();
+                      setShowDevModal(false);
+                      setActiveTab('home');
+                    }}
+                  >
+                    <span>↺</span>
+                    <span>Reset Safe Baseline</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Full Hardware Signal Availability Dashboard */}
+              <SignalAvailabilityDashboard />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

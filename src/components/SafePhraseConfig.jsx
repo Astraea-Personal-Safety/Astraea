@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../state/useApp';
 import './SafePhraseConfig.css';
 
-export default function SafePhraseConfig() {
+export default function SafePhraseConfig({ onInterceptSave = null }) {
   const {
     safeWord,
     duressWord,
@@ -21,6 +21,17 @@ export default function SafePhraseConfig() {
   const handleSave = (e) => {
     e.preventDefault();
     if (!inputSafe.trim()) return;
+
+    if (onInterceptSave) {
+      onInterceptSave(
+        inputSafe.trim().toUpperCase(),
+        inputDuress.trim().toUpperCase(),
+        inputVoiceSos.trim().toUpperCase()
+      );
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      return;
+    }
 
     updateSafePhrases({
       safeWord: inputSafe.trim().toUpperCase(),

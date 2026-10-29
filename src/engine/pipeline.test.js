@@ -16,6 +16,8 @@ import { storage } from '../state/storage.js';
 import { CHECKIN_RESPONSE_WINDOW_SECONDS, CHECKIN_MAX_ATTEMPTS, CHECKIN_RETRY_INTERVAL_SECONDS } from './checkInConfig.js';
 import { matchPhrase, normalizePhrase } from '../signals/useSpeechInteraction.js';
 import { DELIVERY_STAGES } from './deliveryService.js';
+import { hashPin, verifyVaultPin, updateVaultPin, queueSecurityChange, cancelPendingSecurityChange, isWithinTrustedLocation } from './securityVault.js';
+import { classifyVoiceTrigger } from '../signals/voiceTriggers.js';
 
 // Mock localStorage in Node environment
 const mockStorage = {};
@@ -194,6 +196,59 @@ console.assert(DELIVERY_STAGES.ACCEPTED === 'ACCEPTED', 'ACCEPTED stage valid');
 console.assert(DELIVERY_STAGES.QUEUED === 'QUEUED', 'QUEUED stage valid');
 console.assert(DELIVERY_STAGES.SENT === 'SENT', 'SENT stage valid');
 console.log('✓ Flow 6 Passed: Delivery stages integrity verified.');
+
+// Flow 7: Security Vault PIN Hashing, Anti-Coercion Delay & Safe Zone Logic
+console.log('\n[FLOW 7: Security Vault & Location-Aware Delay]');
+async function testSecurityVault() {
+  const pin = '654321';
+  await updateVaultPin(pin);
+  
+  const isValid = await verifyVaultPin(pin);
+  console.assert(isValid === true, 'Correct PIN must verify successfully');
+  
+  const isInvalid = await verifyVaultPin('999999');
+  console.assert(isInvalid === false, 'Wrong PIN must fail verification');
+
+  // Trusted Location Test
+  const safePlaces = [{ name: 'Home', latitude: 12.9716, longitude: 77.5946 }];
+  const nearLocation = { latitude: 12.9720, longitude: 77.5948 }; // ~60m away
+  const farLocation = { latitude: 12.9900, longitude: 77.6200 };  // ~3.5km away
+
+  console.assert(isWithinTrustedLocation(nearLocation, safePlaces) === true, 'Near location should be trusted');
+  console.assert(isWithinTrustedLocation(farLocation, safePlaces) === false, 'Far location should NOT be trusted');
+
+  // Delay queueing
+  const changePayload = { safeWord: 'NEW_SAFE_WORD' };
+  const pending = queueSecurityChange('SAFE_PHRASE', changePayload);
+  console.assert(pending.type === 'SAFE_PHRASE', 'Pending change type stored');
+  console.assert(pending.payload.safeWord === 'NEW_SAFE_WORD', 'Pending payload stored');
+  
+  cancelPendingSecurityChange();
+  console.log('✓ Flow 7 Passed: Security vault PIN hashing, location geofence, and delay queue verified.');
+}
+await testSecurityVault();
+
+// Flow 8: Multi-Language Voice Trigger Classification
+console.log('\n[FLOW 8: Multi-Language Voice Triggers (EN, HI, Hinglish)]');
+const triggerCases = [
+  { transcript: 'Astraea please help me now', expectedType: 'URGENT' },
+  { transcript: 'Mujhe bachao please', expectedType: 'URGENT' },
+  { transcript: 'Emergency hai jaldi aao', expectedType: 'URGENT' },
+  { transcript: 'I feel unsafe here', expectedType: 'CHECKIN' },
+  { transcript: 'Mujhe darr lag raha hai', expectedType: 'CHECKIN' },
+  { transcript: 'Yeh area safe nahi lag raha', expectedType: 'CHECKIN' },
+  { transcript: 'What is the weather outside today', expectedType: null }
+];
+
+triggerCases.forEach(({ transcript, expectedType }) => {
+  const result = classifyVoiceTrigger(transcript);
+  if (expectedType === null) {
+    console.assert(result.matched === false, `Expected no match for: "${transcript}"`);
+  } else {
+    console.assert(result.matched === true && result.type === expectedType, `Trigger test failed for: "${transcript}"`);
+  }
+});
+console.log('✓ Flow 8 Passed: Multi-language voice trigger classification verified.');
 
 console.log('\n' + '='.repeat(80));
 console.log('ALL VERIFICATION FLOWS PASSED SUCCESSFULLY');
