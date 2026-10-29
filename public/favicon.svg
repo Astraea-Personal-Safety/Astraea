@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="shieldGrad" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="pulseGrad" x1="16" y1="20" x2="48" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#93c5fd" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Outer Shield Shadow / Glow -->
+  <path d="M32 4L10 12V28C10 43.5 19.5 54.8 32 60C44.5 54.8 54 43.5 54 28V12L32 4Z" fill="url(#shieldGrad)" />
+
+  <!-- Inner Dark Shield -->
+  <path d="M32 8L14 15V28C14 41.2 21.8 51 32 55.4C42.2 51 50 41.2 50 28V15L32 8Z" fill="#0b1120" />
+
+  <!-- Dynamic Signal Wave / Pulse Motif -->
+  <path d="M19 32H25L28.5 22L34 42L38.5 28L41.5 32H45" stroke="url(#pulseGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" />
+
+  <!-- Center Status Dot -->
+  <circle cx="32" cy="18" r="2.5" fill="#10b981" />
+</svg>

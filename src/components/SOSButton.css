@@ -1,0 +1,453 @@
+/* Fixed Floating SOS Button */
+.sos-fixed-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 900;
+}
+
+.sos-floating-btn {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(220, 38, 38, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  touch-action: none;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.sos-floating-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 12px 30px rgba(220, 38, 38, 0.6);
+}
+
+.sos-floating-btn:active,
+.sos-floating-btn.holding {
+  transform: scale(0.95);
+  box-shadow: 0 0 35px rgba(220, 38, 38, 0.7);
+}
+
+.sos-btn-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.sos-icon {
+  font-size: 19px;
+}
+
+.sos-text {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.sos-hold-ring {
+  position: absolute;
+  inset: -6px;
+  width: 80px;
+  height: 80px;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.hold-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+}
+
+.hold-ring-fill {
+  fill: none;
+  stroke: #ffffff;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.03s linear;
+}
+
+.sos-active-pulse {
+  animation: sos-pulse-anim 1s infinite alternate;
+}
+
+@keyframes sos-pulse-anim {
+  0% { transform: scale(1); box-shadow: 0 0 20px rgba(220, 38, 38, 0.5); }
+  100% { transform: scale(1.1); box-shadow: 0 0 40px rgba(220, 38, 38, 0.8); }
+}
+
+.sos-help-hint {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: #ffffff;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Emergency Modal Overlay */
+.emergency-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.emergency-card {
+  background: #ffffff;
+  border: 2px solid #dc2626;
+  border-radius: 24px;
+  max-width: 520px;
+  width: 100%;
+  padding: 30px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
+  animation: emergency-pop 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  text-align: left;
+}
+
+@keyframes emergency-pop {
+  0% { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.emergency-card-header {
+  text-align: center;
+}
+
+.emergency-siren-badge {
+  font-size: 42px;
+  animation: siren-wiggle 0.5s infinite alternate;
+}
+
+@keyframes siren-wiggle {
+  0% { transform: rotate(-10deg) scale(1); }
+  100% { transform: rotate(10deg) scale(1.1); }
+}
+
+.emergency-card-header h2 {
+  font-size: 22px;
+  color: #dc2626;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-top: 4px;
+}
+
+.emergency-subtitle {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.emergency-reason-banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.reason-tag {
+  font-weight: 800;
+  color: #991b1b;
+}
+
+.reason-text {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+/* Call Links Grid */
+.emergency-call-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.call-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.emergency-call-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 500px) {
+  .emergency-call-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.emergency-call-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  text-decoration: none;
+  color: #ffffff;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+
+.call-112 {
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+  border: 1px solid #b91c1c;
+  box-shadow: 0 4px 15px rgba(220, 38, 38, 0.35);
+}
+
+.call-100 {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border: 1px solid #1e40af;
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
+}
+
+.emergency-call-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.call-icon {
+  font-size: 22px;
+}
+
+.call-text-block {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.call-number {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+}
+
+.call-desc {
+  font-size: 11px;
+  opacity: 0.95;
+}
+
+.call-action {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* Stand Down Section */
+.emergency-stand-down-section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.emergency-stand-down-section h3 {
+  font-size: 14px;
+  color: var(--text-highlight);
+}
+
+.stand-down-instruction {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.stand-down-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.stand-down-input-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.stand-down-input {
+  flex-grow: 1;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+}
+
+.stand-down-input:focus {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+
+.btn-stand-down {
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  border: 1px solid #cbd5e1;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-stand-down:hover {
+  background: #e2e8f0;
+}
+
+.stand-down-error {
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 2px 0 0 0;
+}
+
+/* Siren Audio Toggle in Modal */
+.btn-siren-mute-toggle {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-siren-mute-toggle.sounding {
+  background: #fee2e2;
+  border: 1.5px solid #fca5a5;
+  color: #991b1b;
+  animation: urgentFlash 1s infinite;
+}
+
+.btn-siren-mute-toggle.muted {
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  color: #475569;
+}
+
+/* Direct Dispatch Link Row */
+.emergency-dispatch-action-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.btn-dispatch-link {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.link-sms {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+.link-wa {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.link-share {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+/* Live Delivery Status Mini-Board */
+.modal-delivery-status-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.delivery-status-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.modal-delivery-items {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.modal-delivery-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-delivery-item .contact-name {
+  font-weight: 700;
+}
+
+.status-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.tag-accepted { background: #eff6ff; color: #1e40af; }
+.tag-queued { background: #fef3c7; color: #92400e; }
+.tag-sent { background: #e0f2fe; color: #0369a1; }
+.tag-delivered { background: #ecfdf5; color: #065f46; }
+.tag-acknowledged { background: #f0fdf4; color: #15803d; font-weight: 900; }
+

@@ -1,0 +1,475 @@
+.simulation-panel-wrapper {
+  background: #ffffff;
+  border: 1px solid var(--border-glass);
+  border-radius: 24px;
+  padding: 22px 20px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  text-align: left;
+}
+
+.simulation-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.simulation-tags-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.simulation-tag-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.sensors-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--tier-low-bg);
+  color: var(--tier-low-text);
+  border: 1px solid var(--tier-low-border);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tier-low);
+  box-shadow: 0 0 6px var(--tier-low);
+  animation: livePulse 1.2s infinite alternate;
+}
+
+.simulation-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-highlight);
+  margin-top: 2px;
+}
+
+.simulation-notice {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Presets Strip */
+.presets-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-surface);
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border-glass);
+}
+
+.presets-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.presets-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.presets-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-btn {
+  background: #ffffff;
+  color: var(--text-main);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  transition: all 0.2s ease;
+}
+
+.preset-btn:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.preset-btn.reset-btn {
+  background: var(--tier-low-bg);
+  color: var(--tier-low-text);
+  border-color: var(--tier-low-border);
+  font-weight: 700;
+}
+
+.preset-btn.reset-btn:hover {
+  background: #d1fae5;
+}
+
+/* Controls Grid & Signal Cards */
+.controls-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.signal-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  padding: 15px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.signal-card.signal-real {
+  border-left: 3.5px solid var(--tier-low);
+}
+
+.signal-card.signal-simulated {
+  border-left: 3.5px solid var(--brand-primary);
+}
+
+.control-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.signal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.signal-title-wrap label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-highlight);
+}
+
+.signal-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.badge-real {
+  background: var(--tier-low-bg);
+  color: var(--tier-low-text);
+  border: 1px solid var(--tier-low-border);
+}
+
+.badge-fallback {
+  background: var(--tier-elevated-bg);
+  color: var(--tier-elevated-text);
+  border: 1px solid var(--tier-elevated-border);
+}
+
+.badge-simulated {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.control-val-badge {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid var(--border-glass);
+  color: var(--text-highlight);
+}
+
+.badge-time {
+  color: var(--text-main);
+  background: #ffffff;
+}
+
+.badge-danger {
+  background: var(--tier-critical-bg);
+  color: var(--tier-critical-text);
+  border: 1px solid var(--tier-critical-border);
+}
+
+.signal-source-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* GPS Toggle Button */
+.btn-gps-toggle {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-gps-start {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.btn-gps-start:hover {
+  background: #dbeafe;
+}
+
+.btn-gps-pause {
+  background: var(--tier-critical-bg);
+  color: var(--tier-critical-text);
+  border: 1px solid var(--tier-critical-border);
+}
+
+/* Pre-Permission Box */
+.gps-pre-permission-box {
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.pre-perm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.btn-close-prem {
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.pre-perm-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.btn-grant-gps {
+  background: var(--brand-gradient);
+  color: #ffffff;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Live Telemetry Tiles */
+.live-gps-telemetry-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
+  gap: 6px;
+}
+
+.telemetry-stat-tile {
+  background: #ffffff;
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.telemetry-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.telemetry-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.pace-val {
+  text-transform: capitalize;
+  color: var(--tier-low-text);
+}
+
+.coords-mini {
+  font-size: 10.5px;
+}
+
+/* Fallback Explanation Strip */
+.fallback-explanation-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--tier-elevated-text);
+  background: var(--tier-elevated-bg);
+  border: 1px solid var(--tier-elevated-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.fallback-icon {
+  font-size: 12px;
+}
+
+/* Real Battery Readout */
+.real-battery-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.battery-stat-row {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.battery-stat-row strong {
+  color: var(--text-highlight);
+}
+
+/* Real Geofence Readout */
+.real-geofence-readout {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.geofence-status-text {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.geofence-status-text strong {
+  color: #2563eb;
+}
+
+/* Segmented Control Buttons */
+.segmented-control {
+  display: flex;
+  background: #e2e8f0;
+  padding: 3px;
+  border-radius: 12px;
+  gap: 3px;
+}
+
+.segment-btn {
+  flex: 1;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 7px 8px;
+  border-radius: 9px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.segment-btn:hover {
+  color: var(--text-highlight);
+}
+
+.segment-btn.active {
+  background: #ffffff;
+  color: var(--text-highlight);
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Range Sliders */
+.range-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2563eb;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4);
+  transition: transform 0.1s ease;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.slider-ticks-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.crowd-density-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+  line-height: 1.45;
+}
+

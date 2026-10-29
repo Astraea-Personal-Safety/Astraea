@@ -1,0 +1,339 @@
+.signal-dashboard-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-header-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.dashboard-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dash-icon {
+  font-size: 1.5rem;
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.dashboard-title-group h3 {
+  font-size: 1.05rem;
+  color: var(--text-highlight);
+}
+
+.dashboard-title-group p {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.btn-run-diagnostics {
+  background: #0f172a;
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.btn-run-diagnostics:hover:not(:disabled) {
+  background: #1e293b;
+  transform: translateY(-1px);
+}
+
+.btn-run-diagnostics:disabled {
+  opacity: 0.6;
+}
+
+/* Diagnostic Scan Results */
+.diagnostic-results-box {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diag-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #065f46;
+}
+
+.btn-close-diag {
+  background: transparent;
+  color: #047857;
+  font-size: 0.9rem;
+}
+
+.diag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.diag-item {
+  background: #ffffff;
+  border: 1px solid #d1fae5;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.diag-key {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.diag-val.online {
+  font-weight: 700;
+  color: #059669;
+}
+
+.diag-val.standby {
+  font-weight: 600;
+  color: #d97706;
+}
+
+/* Presets card */
+.presets-section-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.presets-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.presets-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.btn-reset-baseline {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: var(--text-main);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.presets-button-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-preset-inject {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: var(--text-main);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.btn-preset-inject:hover {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+/* 8 Sensor Grid */
+.signals-grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.sensor-tile {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.sensor-tile.tile-active {
+  border-color: #cbd5e1;
+}
+
+.sensor-tile.tile-fallback {
+  background: #fcfcfd;
+}
+
+.sensor-tile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sensor-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sensor-icon {
+  font-size: 1.3rem;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.sensor-name-wrap h5 {
+  font-size: 0.88rem;
+  color: var(--text-highlight);
+}
+
+.sensor-tech {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  display: block;
+}
+
+.status-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
+.pill-active {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.pill-fallback {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.sensor-readings-row {
+  display: flex;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  justify-content: space-between;
+}
+
+.reading-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.reading-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.reading-val {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.danger-highlight {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.sensor-action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.btn-sensor-action {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: var(--text-main);
+  transition: all 0.15s ease;
+}
+
+.btn-sensor-action.start {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.btn-sensor-action.pause {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.btn-sensor-action.simulate {
+  background: #f8fafc;
+}
+
+.btn-sensor-action:hover {
+  filter: brightness(0.96);
+}
+
+.mini-range {
+  width: 100%;
+}
+
+.text-xs {
+  font-size: 0.7rem;
+}
+
+.text-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}

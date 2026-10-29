@@ -1,0 +1,264 @@
+.journey-map-wrapper {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-glass);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.leaflet-map-canvas {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Map HUD Header */
+.map-hud-header {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+}
+
+.hud-location-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.location-pin-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.hud-address-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hud-address-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-highlight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-coords-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.hud-speed-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.hud-speed-val {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--brand-primary);
+  font-family: var(--font-mono);
+}
+
+.hud-pace-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Floating Controls */
+.map-floating-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-map-control {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: var(--text-main);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.btn-map-control:hover {
+  background: #f8fafc;
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.btn-map-control.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+.map-legend-pill {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-dot.user-dot {
+  background: #2563eb;
+  box-shadow: 0 0 4px #2563eb;
+}
+
+.legend-dot.geofence-dot {
+  background: #10b981;
+}
+
+/* Stillness Banner */
+.map-stillness-banner {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 10;
+  background: rgba(254, 243, 199, 0.95);
+  border: 1px solid #fde68a;
+  color: #92400e;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.stillness-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d97706;
+  animation: livePulse 1.2s infinite ease-in-out;
+}
+
+/* Custom Marker CSS */
+.radar-marker-pulse {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radar-core {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.5);
+  z-index: 2;
+}
+
+.radar-ping {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.35);
+  animation: radarPing 1.8s infinite ease-out;
+  z-index: 1;
+}
+
+.radar-marker-pulse.pace-running .radar-core {
+  background: #dc2626;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.6);
+}
+
+.radar-marker-pulse.pace-running .radar-ping {
+  background: rgba(220, 38, 38, 0.4);
+}
+
+.radar-marker-pulse.pace-increasing .radar-core {
+  background: #d97706;
+}
+
+.radar-marker-pulse.pace-increasing .radar-ping {
+  background: rgba(217, 119, 6, 0.4);
+}
+
+@keyframes radarPing {
+  0% {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Place Marker Bubble */
+.place-marker-bubble {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1.5px solid #059669;
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #065f46;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  white-space: nowrap;
+}

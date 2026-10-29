@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" fill="none">
+  <defs>
+    <radialGradient id="bgGlow" cx="600" cy="315" r="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e1b4b" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#070a13" stop-opacity="1" />
+    </radialGradient>
+    <linearGradient id="shieldGrad" x1="100" y1="50" x2="300" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0" y1="0" x2="600" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#cbd5e1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#070a13" />
+  <rect width="1200" height="630" fill="url(#bgGlow)" />
+
+  <!-- Grid decoration lines -->
+  <g opacity="0.1" stroke="#6366f1" stroke-width="1">
+    <line x1="0" y1="105" x2="1200" y2="105" />
+    <line x1="0" y1="210" x2="1200" y2="210" />
+    <line x1="0" y1="315" x2="1200" y2="315" />
+    <line x1="0" y1="420" x2="1200" y2="420" />
+    <line x1="0" y1="525" x2="1200" y2="525" />
+    <line x1="200" y1="0" x2="200" y2="630" />
+    <line x1="400" y1="0" x2="400" y2="630" />
+    <line x1="600" y1="0" x2="600" y2="630" />
+    <line x1="800" y1="0" x2="800" y2="630" />
+    <line x1="1000" y1="0" x2="1000" y2="630" />
+  </g>
+
+  <!-- Central Shield Graphic -->
+  <g transform="translate(140, 165) scale(2.8)">
+    <path d="M32 4L10 12V28C10 43.5 19.5 54.8 32 60C44.5 54.8 54 43.5 54 28V12L32 4Z" fill="url(#shieldGrad)" />
+    <path d="M32 8L14 15V28C14 41.2 21.8 51 32 55.4C42.2 51 50 41.2 50 28V15L32 8Z" fill="#0b1120" />
+    <path d="M19 32H25L28.5 22L34 42L38.5 28L41.5 32H45" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="32" cy="18" r="2.5" fill="#10b981" />
+  </g>
+
+  <!-- Title and Description -->
+  <text x="360" y="240" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="64" fill="url(#textGrad)" letter-spacing="-1.5">Astraea</text>
+  
+  <text x="360" y="300" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="28" fill="#38bdf8">Personal Guardian AI • Composite Risk Safety Engine</text>
+  
+  <text x="360" y="370" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="22" fill="#94a3b8">
+    Multi-signal telemetry • Silence escalation • Anti-coercion stand-down • 100% on-device
+  </text>
+
+  <!-- Feature Badges -->
+  <g transform="translate(360, 430)">
+    <!-- Badge 1 -->
+    <rect width="180" height="42" rx="21" fill="#1e293b" stroke="#334155" />
+    <text x="20" y="27" font-family="system-ui, sans-serif" font-size="16" font-weight="600" fill="#e2e8f0">🛡️ 4 Risk Tiers</text>
+
+    <!-- Badge 2 -->
+    <rect x="200" width="220" height="42" rx="21" fill="#1e293b" stroke="#334155" />
+    <text x="220" y="27" font-family="system-ui, sans-serif" font-size="16" font-weight="600" fill="#e2e8f0">📍 Kinematics & GPS</text>
+
+    <!-- Badge 3 -->
+    <rect x="440" width="220" height="42" rx="21" fill="#1e293b" stroke="#334155" />
+    <text x="460" y="27" font-family="system-ui, sans-serif" font-size="16" font-weight="600" fill="#e2e8f0">⚡ Emergency SOS</text>
+  </g>
+</svg>

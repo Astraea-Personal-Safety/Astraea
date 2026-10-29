@@ -1,0 +1,18 @@
+{
+  "name": "Astraea — Composite Risk Safety App",
+  "short_name": "Astraea",
+  "description": "Multi-signal personal safety guardian with real-time composite risk scoring, silent escalation, and anti-coercion stand-down.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f1d",
+  "theme_color": "#0a0f1d",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

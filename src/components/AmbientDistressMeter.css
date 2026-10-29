@@ -1,0 +1,182 @@
+.ambient-meter-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.3s ease;
+}
+
+.ambient-meter-card.distress-active {
+  border-color: #ef4444;
+  background: #fef2f2;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
+}
+
+.ambient-meter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ambient-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ambient-mic-icon {
+  font-size: 1.3rem;
+  background: #eff6ff;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.ambient-title-block h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-highlight);
+}
+
+.ambient-subtext {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.btn-mic-toggle {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: var(--text-main);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-mic-toggle.active {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.live-audio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #059669;
+  animation: livePulse 1.2s infinite;
+}
+
+/* Spectrum visualizer */
+.audio-visualizer-container {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.spectrum-bars-row {
+  height: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.spectrum-bar {
+  flex: 1;
+  background: #94a3b8;
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+  transition: height 0.08s ease;
+}
+
+.spectrum-bar.scream-band {
+  background: #3b82f6;
+}
+
+.distress-active .spectrum-bar.scream-band {
+  background: #dc2626;
+}
+
+.audio-stats-strip {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.audio-stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.audio-stat-item .stat-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.audio-stat-item .stat-value {
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-main);
+}
+
+.stat-value.scream-warning {
+  color: #d97706;
+}
+
+.stat-value.status-distress {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.stat-value.status-normal {
+  color: #059669;
+}
+
+/* Footer strip */
+.ambient-footer-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.privacy-lock-badge {
+  font-size: 0.7rem;
+  color: #059669;
+  font-weight: 600;
+}
+
+.btn-simulate-scream {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: var(--text-main);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.btn-simulate-scream:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}

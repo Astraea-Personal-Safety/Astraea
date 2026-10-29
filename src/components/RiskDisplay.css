@@ -1,0 +1,457 @@
+.risk-guardian-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+/* Hero Radar Shield Card */
+.guardian-radar-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid var(--border-glass);
+  border-radius: 24px;
+  padding: 22px 20px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tier-low .guardian-radar-card {
+  border-color: var(--tier-low-border);
+  box-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.08);
+}
+
+.tier-elevated .guardian-radar-card {
+  border-color: var(--tier-elevated-border);
+  box-shadow: 0 10px 25px -5px rgba(217, 119, 6, 0.08);
+}
+
+.tier-high .guardian-radar-card {
+  border-color: var(--tier-high-border);
+  box-shadow: 0 10px 25px -5px rgba(234, 88, 12, 0.1);
+}
+
+.tier-critical .guardian-radar-card {
+  border-color: var(--tier-critical-border);
+  box-shadow: 0 10px 30px -5px rgba(220, 38, 38, 0.18);
+}
+
+/* Radar Glow Aura behind meter */
+.radar-glow-aura {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  opacity: 0.06;
+  filter: blur(50px);
+  pointer-events: none;
+  z-index: 0;
+  transition: all 0.4s ease;
+}
+
+.tier-low .radar-glow-aura { background: var(--tier-low); }
+.tier-elevated .radar-glow-aura { background: var(--tier-elevated); }
+.tier-high .radar-glow-aura { background: var(--tier-high); }
+.tier-critical .radar-glow-aura { background: var(--tier-critical); opacity: 0.15; }
+
+/* Radar Header */
+.radar-header-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.radar-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.radar-beacon-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tier-low .radar-beacon-dot { background: var(--tier-low); box-shadow: 0 0 6px var(--tier-low); }
+.tier-elevated .radar-beacon-dot { background: var(--tier-elevated); box-shadow: 0 0 8px var(--tier-elevated); }
+.tier-high .radar-beacon-dot { background: var(--tier-high); box-shadow: 0 0 10px var(--tier-high); animation: livePulse 1.5s infinite; }
+.tier-critical .radar-beacon-dot { background: var(--tier-critical); box-shadow: 0 0 12px var(--tier-critical); animation: livePulse 0.8s infinite; }
+
+.radar-tier-tag {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-low {
+  background: var(--tier-low-bg);
+  color: var(--tier-low-text);
+  border: 1px solid var(--tier-low-border);
+}
+
+.tag-elevated {
+  background: var(--tier-elevated-bg);
+  color: var(--tier-elevated-text);
+  border: 1px solid var(--tier-elevated-border);
+}
+
+.tag-high {
+  background: var(--tier-high-bg);
+  color: var(--tier-high-text);
+  border: 1px solid var(--tier-high-border);
+}
+
+.tag-critical {
+  background: var(--tier-critical-bg);
+  color: var(--tier-critical-text);
+  border: 1px solid var(--tier-critical-border);
+  animation: livePulse 1s infinite alternate;
+}
+
+/* Radar Hero Meter */
+.radar-hero-meter {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.gauge-wrapper {
+  position: relative;
+  width: 125px;
+  height: 125px;
+  flex-shrink: 0;
+}
+
+.gauge-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gauge-track {
+  fill: none;
+  stroke: #f1f5f9;
+}
+
+.gauge-value {
+  fill: none;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.4s ease;
+}
+
+.gauge-val-low { stroke: var(--tier-low); }
+.gauge-val-elevated { stroke: var(--tier-elevated); }
+.gauge-val-high { stroke: var(--tier-high); filter: drop-shadow(0 0 4px rgba(234, 88, 12, 0.3)); }
+.gauge-val-critical { stroke: var(--tier-critical); filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.4)); }
+
+.gauge-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-score-number {
+  font-family: var(--font-mono);
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-highlight);
+  letter-spacing: -0.04em;
+}
+
+.gauge-score-scale {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+.gauge-threat-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.tier-low .gauge-threat-label { color: var(--tier-low-text); }
+.tier-elevated .gauge-threat-label { color: var(--tier-elevated-text); }
+.tier-high .gauge-threat-label { color: var(--tier-high-text); }
+.tier-critical .gauge-threat-label { color: var(--tier-critical-text); }
+
+.radar-action-brief {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.spectrum-track {
+  position: relative;
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  display: flex;
+  gap: 2px;
+}
+
+.spectrum-seg {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.seg-low { width: 30%; background: #a7f3d0; }
+.seg-elevated { width: 30%; background: #fde68a; }
+.seg-high { width: 25%; background: #fed7aa; }
+.seg-critical { width: 15%; background: #fecaca; }
+
+.spectrum-needle {
+  position: absolute;
+  top: -3px;
+  width: 6px;
+  height: 14px;
+  background: #0f172a;
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transform: translateX(-50%);
+  transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.radar-guidance-text {
+  font-size: 12.5px;
+  color: #475569;
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* 2. Live Telemetry HUD Quad-Grid */
+.telemetry-hud-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-glass);
+}
+
+.hud-tile {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glass);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-tile-icon {
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.hud-tile-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hud-tile-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hud-tile-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-highlight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 3. Security Analysis Card */
+.security-factors-card {
+  background: #ffffff;
+  border: 1px solid var(--border-glass);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.factors-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.factors-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.factors-shield-icon {
+  font-size: 15px;
+}
+
+.factors-title-group h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-highlight);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.factors-pill-count {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.factors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.factor-card-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glass);
+  font-size: 12.5px;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+
+.factor-item-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.factor-item-text {
+  flex: 1;
+}
+
+.factor-category-tag {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+}
+
+.tag-emergency {
+  border-color: var(--tier-critical-border);
+  background: var(--tier-critical-bg);
+  color: var(--tier-critical-text);
+}
+
+.tag-multiplier {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tag-modifier {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.tag-kinematic {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.critical-flash-trigger {
+  animation: urgentFlash 0.8s ease-out;
+}
+
+.ai-guardrail-subtitle {
+  font-size: 0.7rem;
+  color: #059669;
+  font-weight: 600;
+}
+
+.ai-explanation-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-summary-text {
+  font-size: 0.82rem;
+  color: var(--text-highlight);
+  line-height: 1.4;
+}
+
+.ai-recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recs-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ai-recommendations-list ul {
+  padding-left: 18px;
+  font-size: 0.78rem;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+
