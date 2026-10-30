@@ -72,6 +72,7 @@ export const apiClient = {
     callType = 'checkin', // 'checkin' | 'alert'
     recipientName = 'Rishi',
     trackingUrl = '',
+    sessionId = '',
     emergencyReason = 'Missed safety check-in window',
     dryRun = false
   }) {
@@ -84,6 +85,7 @@ export const apiClient = {
           callType,
           recipientName,
           trackingUrl,
+          sessionId,
           emergencyReason,
           dryRun
         })

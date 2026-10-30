@@ -61,15 +61,12 @@ export default function TrustedCircleManager() {
   };
 
   const handleTestTelegram = async () => {
-    if (!inputTelegram.botToken || !inputTelegram.chatId) {
-      setTelegramTestStatus({ ok: false, msg: 'Please enter Bot Token & Chat ID' });
-      return;
-    }
+    // Empty fields => test the server's default bot (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)
     setTelegramTestStatus({ ok: true, msg: 'Calling Telegram API...' });
     const res = await sendTelegramAlert({
       botToken: inputTelegram.botToken,
       chatId: inputTelegram.chatId,
-      messageText: '🚨 <b>ASTRAEA TEST DISPATCH</b>\nLive integration verified with Telegram Bot REST API!'
+      messageText: '🚨 ASTRAEA TEST DISPATCH\nLive integration verified with Telegram Bot REST API!'
     });
     if (res.success) {
       setTelegramTestStatus({ ok: true, msg: '✓ Message received on Telegram!' });
@@ -238,7 +235,7 @@ export default function TrustedCircleManager() {
             </label>
           </div>
           <p className="webhook-hint">
-            Astraea sends real-time emergency notifications directly to your phone via Telegram Bot API (<code>api.telegram.org</code>).
+            Astraea sends real-time emergency notifications directly to your phone via Telegram Bot API (<code>api.telegram.org</code>). Leave both fields blank to use the server's default bot (<code>TELEGRAM_BOT_TOKEN</code> / <code>TELEGRAM_CHAT_ID</code>).
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
             <input

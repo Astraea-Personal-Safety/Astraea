@@ -21,8 +21,8 @@ export default async function handler(req, res) {
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId required' });
     }
-    const latest = store.getLatestLocation(sessionId);
-    const history = store.getLocations(sessionId);
+    const latest = await store.getLatestLocation(sessionId);
+    const history = await store.getLocations(sessionId);
     return res.status(200).json({ success: true, latest, count: history.length });
   }
 
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'sessionId, latitude, and longitude are required' });
       }
 
-      const recorded = store.addLocation(sessionId, {
+      const recorded = await store.addLocation(sessionId, {
         latitude: Number(latitude),
         longitude: Number(longitude),
         speed: Number(speed),

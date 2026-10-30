@@ -375,6 +375,26 @@ export function AppProvider({ children }) {
       }
     });
 
+    // Back the public tracking link (/track/<sosSessionId>) with real data. Fire-and-forget:
+    // apiClient swallows network errors so this can never block the emergency flow.
+    const sosSessionId = `sos-${now}`;
+    apiClient.syncSession({
+      sessionId: sosSessionId,
+      userName: 'Astraea User',
+      status: 'SOS_ACTIVE',
+      tier: 'CRITICAL',
+      circleContacts: mode === 'Connected' ? (trustedCircle || []) : []
+    });
+    if (geoSignals.coordinates) {
+      apiClient.streamLocation({
+        sessionId: sosSessionId,
+        latitude: geoSignals.coordinates.latitude,
+        longitude: geoSignals.coordinates.longitude,
+        accuracy: geoSignals.coordinates.accuracy,
+        riskTier: 'CRITICAL'
+      });
+    }
+
     // Trigger Outbound AI Call to Primary Emergency Contact via Bolna
     const primaryContact = (trustedCircle || []).find(c => c.phone);
     if (primaryContact && primaryContact.phone) {
@@ -382,7 +402,8 @@ export function AppProvider({ children }) {
         phoneNumber: primaryContact.phone,
         callType: 'alert',
         recipientName: primaryContact.name || 'Emergency Contact',
-        trackingUrl: `https://astraea-safety.vercel.app/track/sos-${now}`,
+        trackingUrl: `${typeof window !== 'undefined' ? window.location.origin : 'https://astraea-safety.vercel.app'}/track/${sosSessionId}`,
+        sessionId: sosSessionId,
         emergencyReason: reasonText,
         dryRun: false
       }).catch(err => {

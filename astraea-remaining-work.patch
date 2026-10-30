@@ -1,0 +1,1592 @@
+diff --git a/.env.example b/.env.example
+index 805e5c4..00f09df 100644
+--- a/.env.example
++++ b/.env.example
+@@ -7,10 +7,22 @@ BOLNA_API_KEY=bn-your-bolna-api-key
+ BOLNA_CHECKIN_AGENT_ID=your-checkin-agent-uuid
+ BOLNA_ALERT_AGENT_ID=your-alert-agent-uuid
+ 
++# Optional shared secret for the Bolna webhook. If set, configure the Bolna agents' webhook as
++#   https://<your-domain>/api/bolna/webhook?secret=<this value>
++BOLNA_WEBHOOK_SECRET=
++
+ # Safety Rails & Simulation Modes
+ BOLNA_DRY_RUN=false
+ VERIFIED_PHONE_NUMBERS=+91XXXXXXXXXX
+ 
++# Persistent storage for sessions / tracking / call results (optional but needed on Vercel for
++# /track/:id to work across serverless instances). Create a free Upstash Redis database (or add
++# Vercel KV from the Marketplace) and paste the REST URL + token. Either naming works:
++UPSTASH_REDIS_REST_URL=
++UPSTASH_REDIS_REST_TOKEN=
++# KV_REST_API_URL=
++# KV_REST_API_TOKEN=
++
+ # Emergency Gateways (Optional)
+ TELEGRAM_BOT_TOKEN=
+ TELEGRAM_CHAT_ID=
+@@ -18,6 +30,9 @@ CALLMEBOT_API_KEY=
+ TWILIO_ACCOUNT_SID=
+ TWILIO_AUTH_TOKEN=
+ TWILIO_PHONE_NUMBER=
++# WhatsApp sender for Twilio (e.g. +14155238886 sandbox); falls back to TWILIO_PHONE_NUMBER
++TWILIO_WHATSAPP_NUMBER=
++# The server-side WhatsApp relay only delivers to numbers listed in VERIFIED_PHONE_NUMBERS
+ 
+ # Gemini Safety Reasoning API (Optional)
+ VITE_GEMINI_API_KEY=
+diff --git a/api/_callAnalysis.js b/api/_callAnalysis.js
+new file mode 100644
+index 0000000..24dc999
+--- /dev/null
++++ b/api/_callAnalysis.js
+@@ -0,0 +1,166 @@
++/**
++ * Astraea Backend - Bolna call transcript analysis (pure functions, unit-tested)
++ *
++ * Design notes:
++ * - Only the *callee's* lines are analysed when the transcript carries speaker
++ *   labels. The AI agent's own script says things like "are you safe?" and must
++ *   never be mistaken for the user confirming safety.
++ * - Distress always wins over reassurance (fail-safe): "I'm safe but please help"
++ *   is treated as duress.
++ * - Negations ("not safe", "nahi theek") are treated as distress, and
++ *   "no need for help" is neutralised before keyword matching.
++ */
++
++const AGENT_ROLES = ['assistant', 'agent', 'bot', 'ai', 'system'];
++const CALLEE_ROLES = ['user', 'human', 'customer', 'recipient', 'caller', 'callee'];
++
++const DURESS_PATTERNS = [
++  /\bhelp\b/, /\bbachao\b/, /\bbachaao\b/, /\bmadad\b/, /\bdanger\b/, /\bunsafe\b/,
++  /\bfollowing me\b/, /\bscared\b/, /\bafraid\b/, /\bkidnap\w*\b/, /\battack\w*\b/,
++  /\bthreat\w*\b/, /\bdarr\b/, /\bdar lag\b/, /\bpolice\b/,
++  /\b(?:not|never|nahi|nahin|n't)\s+(?:\w+\s+)?(?:safe|fine|ok|okay|good|theek|surakshit)\b/
++];
++
++const NEUTRALISERS = [
++  /\b(?:no|don'?t|do not|doesn'?t|not)\s+(?:need|want|require)\s+(?:for\s+|any\s+)?(?:help|police)\b/g,
++  /\bno\s+(?:help|danger|problem)\b/g,
++  /\bkoi\s+(?:problem|danger)\s+nahi\b/g,
++  /\bmadad\s+ki\s+zaroorat\s+nahi\b/g
++];
++
++const SAFE_PATTERNS = [
++  /\bsafe\b/, /\bfine\b/, /\bok\b/, /\bokay\b/, /\ball good\b/, /\bi'?m good\b/, /\bi am good\b/,
++  /\breached\b/, /\bhome\b/, /\btheek\b/, /\bsurakshit\b/, /\bsab theek\b/
++];
++
++const WILL_ASSIST_PATTERNS = [
++  /\bon my way\b/, /\bi'?m coming\b/, /\bi am coming\b/, /\bcoming now\b/,
++  /\bi(?:'ll| will) (?:go|call|check|reach|find|head)\b/, /\bcalling (?:the )?(?:police|him|her|them)\b/,
++  /\bwill call\b/, /\bmain (?:ja|aa|call)\b/, /\bja raha\b/, /\bja rahi\b/, /\bpahunch\b/, /\breaching\b/
++];
++
++const ACK_PATTERNS = [/\byes\b/, /\bhaan\b/, /\bha\b/, /\bok\b/, /\bokay\b/, /\bunderstood\b/, /\bgot it\b/, /\btheek hai\b/];
++
++const DECLINE_PATTERNS = [/\bwrong number\b/, /\bcan'?t\b/, /\bcannot\b/, /\bwon'?t\b/, /\bunable\b/, /\bnot able\b/];
++
++const UNREACHED_STATUSES = ['no-answer', 'no_answer', 'busy', 'failed', 'canceled', 'cancelled', 'error', 'balance-low', 'stopped', 'voicemail'];
++const ENDED_STATUSES = ['completed', 'done', 'call-disconnected', 'call_disconnected', 'ended'];
++
++function normalizeText(text) {
++  return String(text || '')
++    .toLowerCase()
++    .replace(/[“”"]/g, ' ')
++    .replace(/[^a-z0-9'\sऀ-ॿ]/g, ' ')
++    .replace(/\s+/g, ' ')
++    .trim();
++}
++
++/**
++ * Extracts the text spoken by the person who answered the call.
++ * Accepts: plain string, "role: text" multi-line string, or [{ role, content|text|message }].
++ * Falls back to the full text when no speaker labels are present.
++ */
++export function extractCalleeText(transcript) {
++  if (transcript == null) return '';
++
++  if (Array.isArray(transcript)) {
++    const labelled = transcript
++      .map(t => (typeof t === 'string' ? { role: '', text: t } : {
++        role: String(t.role || t.speaker || '').toLowerCase(),
++        text: t.content ?? t.text ?? t.message ?? ''
++      }));
++    const callee = labelled.filter(t => CALLEE_ROLES.includes(t.role)).map(t => t.text);
++    if (callee.length > 0) return callee.join(' ');
++    const unlabelled = labelled.filter(t => !AGENT_ROLES.includes(t.role)).map(t => t.text);
++    return unlabelled.join(' ');
++  }
++
++  if (typeof transcript === 'object') {
++    return extractCalleeText(transcript.messages || transcript.turns || JSON.stringify(transcript));
++  }
++
++  const text = String(transcript);
++  const lines = text.split(/\r?\n/);
++  const roleLine = /^\s*([a-z ]{2,12})\s*:\s*(.*)$/i;
++  const hasLabels = lines.some(l => {
++    const m = l.match(roleLine);
++    return m && [...AGENT_ROLES, ...CALLEE_ROLES].includes(m[1].trim().toLowerCase());
++  });
++  if (!hasLabels) return text;
++
++  const calleeLines = [];
++  let current = null;
++  for (const line of lines) {
++    const m = line.match(roleLine);
++    const role = m ? m[1].trim().toLowerCase() : null;
++    if (role && [...AGENT_ROLES, ...CALLEE_ROLES].includes(role)) {
++      current = CALLEE_ROLES.includes(role) ? 'callee' : 'agent';
++      if (current === 'callee') calleeLines.push(m[2]);
++    } else if (current === 'callee') {
++      calleeLines.push(line);
++    }
++  }
++  return calleeLines.join(' ');
++}
++
++/** Classifies the callee's words: 'DURESS' | 'SAFE' | 'NONE'. */
++export function classifySafety(calleeText) {
++  let t = normalizeText(calleeText);
++  if (!t) return 'NONE';
++  for (const re of NEUTRALISERS) t = t.replace(re, ' ');
++  if (DURESS_PATTERNS.some(re => re.test(t))) return 'DURESS';
++  if (SAFE_PATTERNS.some(re => re.test(t))) return 'SAFE';
++  return 'NONE';
++}
++
++/** For alert calls to an emergency contact: did they commit to helping? */
++export function classifyContactResponse(calleeText) {
++  const t = normalizeText(calleeText);
++  if (!t) return 'NO_RESPONSE';
++  if (WILL_ASSIST_PATTERNS.some(re => re.test(t))) return 'WILL_ASSIST';
++  if (DECLINE_PATTERNS.some(re => re.test(t))) return 'DECLINED';
++  if (ACK_PATTERNS.some(re => re.test(t))) return 'ACKNOWLEDGED';
++  return 'UNCLEAR';
++}
++
++export function mapCallStatus(status) {
++  const s = String(status || '').toLowerCase();
++  if (ENDED_STATUSES.includes(s)) return 'ENDED';
++  if (UNREACHED_STATUSES.includes(s)) return 'UNREACHED';
++  return 'IN_PROGRESS';
++}
++
++/**
++ * Turns a raw Bolna webhook payload into a processed result.
++ * @param {object} payload   Raw Bolna webhook body
++ * @param {string} callType  'checkin' | 'alert'
++ */
++export function analyzeCall(payload, callType = 'checkin') {
++  const lifecycle = mapCallStatus(payload.status);
++
++  if (lifecycle === 'IN_PROGRESS') {
++    return { analyzedStatus: 'PENDING', lifecycle, contactResponse: null, contactAcknowledged: false, terminal: false };
++  }
++  if (lifecycle === 'UNREACHED') {
++    return { analyzedStatus: 'CALL_UNANSWERED', lifecycle, contactResponse: 'NO_RESPONSE', contactAcknowledged: false, terminal: true };
++  }
++
++  const callee = extractCalleeText(payload.transcript);
++
++  if (callType === 'alert') {
++    const contactResponse = classifyContactResponse(callee);
++    const contactAcknowledged = contactResponse === 'WILL_ASSIST' || contactResponse === 'ACKNOWLEDGED';
++    let analyzedStatus = 'CALL_COMPLETED';
++    if (contactResponse === 'WILL_ASSIST') analyzedStatus = 'CONTACT_WILL_ASSIST';
++    else if (contactResponse === 'ACKNOWLEDGED') analyzedStatus = 'CONTACT_ACKNOWLEDGED';
++    else if (contactResponse === 'NO_RESPONSE') analyzedStatus = 'CALL_UNANSWERED';
++    return { analyzedStatus, lifecycle, contactResponse, contactAcknowledged, terminal: true };
++  }
++
++  const safety = classifySafety(callee);
++  let analyzedStatus = 'CALL_COMPLETED';
++  if (safety === 'DURESS') analyzedStatus = 'USER_CONFIRMED_DURESS';
++  else if (safety === 'SAFE') analyzedStatus = 'USER_CONFIRMED_SAFE';
++  else if (!normalizeText(callee)) analyzedStatus = 'CALL_UNANSWERED';
++  return { analyzedStatus, lifecycle, contactResponse: null, contactAcknowledged: false, terminal: true };
++}
+diff --git a/api/_env.js b/api/_env.js
+new file mode 100644
+index 0000000..7d4aea7
+--- /dev/null
++++ b/api/_env.js
+@@ -0,0 +1,62 @@
++/**
++ * Astraea Backend - Environment helper
++ *
++ * Reads from process.env first (Vercel / production), then falls back to a local
++ * `.env.local` file (local `vercel dev` / plain Node runs). Secrets are NEVER
++ * hard-coded here; this file only knows how to look them up.
++ */
++
++import fs from 'node:fs';
++import path from 'node:path';
++
++let localEnvCache = null;
++
++function loadLocalEnv() {
++  if (localEnvCache) return localEnvCache;
++  localEnvCache = {};
++  try {
++    const envPath = path.resolve(process.cwd(), '.env.local');
++    if (fs.existsSync(envPath)) {
++      const content = fs.readFileSync(envPath, 'utf8');
++      for (const line of content.split(/\r?\n/)) {
++        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/i);
++        if (m) localEnvCache[m[1]] = m[2].trim().replace(/^["']|["']$/g, '');
++      }
++    }
++  } catch {
++    // ignore - file may be unreadable in serverless runtimes
++  }
++  return localEnvCache;
++}
++
++export function getEnv(key, fallback = '') {
++  if (process.env[key]) return process.env[key];
++  const local = loadLocalEnv();
++  if (local[key]) return local[key];
++  return fallback;
++}
++
++/** Comma-separated VERIFIED_PHONE_NUMBERS -> normalized E.164 list ([] if unset). */
++export function getVerifiedPhones() {
++  return getEnv('VERIFIED_PHONE_NUMBERS')
++    .split(',')
++    .map(p => normalizePhone(p))
++    .filter(Boolean);
++}
++
++export function normalizePhone(phone) {
++  const cleaned = String(phone || '').replace(/[\s\-()]/g, '');
++  if (!cleaned) return '';
++  return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
++}
++
++export function parseBody(req) {
++  if (typeof req.body === 'string') {
++    try {
++      return JSON.parse(req.body);
++    } catch {
++      return {};
++    }
++  }
++  return req.body || {};
++}
+diff --git a/api/_store.js b/api/_store.js
+index bd6543d..8d20df8 100644
+--- a/api/_store.js
++++ b/api/_store.js
+@@ -1,60 +1,180 @@
+ /**
+- * Astraea Backend - Global Serverless In-Memory / Storage Store
+- * Provides ephemeral state for active sessions, locations, and call rate limiting.
++ * Astraea Backend - Serverless Store
++ *
++ * Two modes, chosen automatically from environment variables:
++ *
++ * 1. In-memory (default). Works for `npm run dev`, tests and a single Node server.
++ *    Methods return plain values (synchronously).
++ *
++ * 2. Persistent Redis over the Upstash / Vercel KV REST API. Enabled when either
++ *      UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
++ *      KV_REST_API_URL        + KV_REST_API_TOKEN          (Vercel KV marketplace names)
++ *    are set. Methods return Promises. No extra npm dependency (plain fetch).
++ *    If Redis is unreachable we log and fall back to the in-memory copy, so a
++ *    storage outage can never block an emergency flow.
++ *
++ * Callers should always `await` store methods; awaiting a plain value is harmless.
+  */
+ 
+-// In-memory store (retained across hot lambda invocations)
++import { getEnv } from './_env.js';
++
++const TTL_SESSION_SECONDS = 24 * 60 * 60;
++const TTL_CALL_RESULT_SECONDS = 7 * 24 * 60 * 60;
++const MAX_LOCATIONS = 100;
++const K = 'astraea:';
++
++// In-memory store (retained across hot lambda invocations; always written as a fallback copy)
+ const memoryStore = {
+   sessions: new Map(),
+   locations: new Map(), // sessionId -> Array of { lat, lng, speed, timestamp }
+-  callLog: []           // Array of { phone, agentId, timestamp, executionId }
++  callLog: [],          // Array of { phone, agentId, timestamp, executionId }
++  callResults: new Map(), // executionId -> processed Bolna webhook result
++  marks: new Map()      // generic rate-limit marks: key -> timestamp
+ };
+ 
++// ---------------------------------------------------------------------------
++// Redis (Upstash REST) helpers
++// ---------------------------------------------------------------------------
++
++function redisConfig() {
++  const url = getEnv('UPSTASH_REDIS_REST_URL') || getEnv('KV_REST_API_URL');
++  const token = getEnv('UPSTASH_REDIS_REST_TOKEN') || getEnv('KV_REST_API_TOKEN');
++  return url && token ? { url: url.replace(/\/+$/, ''), token } : null;
++}
++
++export function isPersistent() {
++  return redisConfig() !== null;
++}
++
++/** Runs a pipeline of Redis commands; returns array of results. Throws on any error. */
++async function redis(commands) {
++  const cfg = redisConfig();
++  const res = await fetch(`${cfg.url}/pipeline`, {
++    method: 'POST',
++    headers: {
++      Authorization: `Bearer ${cfg.token}`,
++      'Content-Type': 'application/json'
++    },
++    body: JSON.stringify(commands)
++  });
++  if (!res.ok) throw new Error(`Redis HTTP ${res.status}`);
++  const out = await res.json();
++  return out.map(item => {
++    if (item.error) throw new Error(`Redis: ${item.error}`);
++    return item.result;
++  });
++}
++
++function parseJson(raw) {
++  if (raw == null) return null;
++  try {
++    return JSON.parse(raw);
++  } catch {
++    return null;
++  }
++}
++
++/** Use Redis when configured, otherwise (or on failure) the in-memory implementation. */
++function hybrid(redisImpl, memoryImpl) {
++  if (!isPersistent()) return memoryImpl();
++  return redisImpl().catch(err => {
++    console.warn('[store] Redis unavailable, using in-memory fallback:', err.message);
++    return memoryImpl();
++  });
++}
++
++const cleanPhone = phone => String(phone).replace(/\s+/g, '');
++
++// ---------------------------------------------------------------------------
++// Public store API
++// ---------------------------------------------------------------------------
++
+ export const store = {
+   // Session
+   createOrUpdateSession(sessionId, data) {
+-    const existing = memoryStore.sessions.get(sessionId) || {};
+-    const updated = {
+-      ...existing,
+-      ...data,
+-      sessionId,
+-      updatedAt: Date.now()
++    const memWrite = () => {
++      const existing = memoryStore.sessions.get(sessionId) || {};
++      const updated = { ...existing, ...data, sessionId, updatedAt: Date.now() };
++      memoryStore.sessions.set(sessionId, updated);
++      return updated;
+     };
+-    memoryStore.sessions.set(sessionId, updated);
+-    return updated;
++    if (!isPersistent()) return memWrite();
++
++    return (async () => {
++      const updated = memWrite(); // keeps fallback copy fresh
++      try {
++        const [raw] = await redis([['GET', `${K}session:${sessionId}`]]);
++        const merged = { ...(parseJson(raw) || {}), ...updated };
++        await redis([['SET', `${K}session:${sessionId}`, JSON.stringify(merged), 'EX', TTL_SESSION_SECONDS]]);
++        return merged;
++      } catch (err) {
++        console.warn('[store] createOrUpdateSession fallback:', err.message);
++        return updated;
++      }
++    })();
+   },
+ 
+   getSession(sessionId) {
+-    return memoryStore.sessions.get(sessionId) || null;
++    return hybrid(
++      async () => {
++        const [raw] = await redis([['GET', `${K}session:${sessionId}`]]);
++        return parseJson(raw) || memoryStore.sessions.get(sessionId) || null;
++      },
++      () => memoryStore.sessions.get(sessionId) || null
++    );
+   },
+ 
+   // Location
+   addLocation(sessionId, locationData) {
++    const item = { ...locationData, receivedAt: Date.now() };
+     const list = memoryStore.locations.get(sessionId) || [];
+-    const item = {
+-      ...locationData,
+-      receivedAt: Date.now()
+-    };
+     list.push(item);
+-    // Keep last 100 locations
+-    if (list.length > 100) list.shift();
++    if (list.length > MAX_LOCATIONS) list.shift();
+     memoryStore.locations.set(sessionId, list);
+-    return item;
++    if (!isPersistent()) return item;
++
++    const key = `${K}loc:${sessionId}`;
++    return redis([
++      ['RPUSH', key, JSON.stringify(item)],
++      ['LTRIM', key, -MAX_LOCATIONS, -1],
++      ['EXPIRE', key, TTL_SESSION_SECONDS]
++    ]).then(() => item).catch(err => {
++      console.warn('[store] addLocation fallback:', err.message);
++      return item;
++    });
+   },
+ 
+   getLocations(sessionId) {
+-    return memoryStore.locations.get(sessionId) || [];
++    return hybrid(
++      async () => {
++        const [rows] = await redis([['LRANGE', `${K}loc:${sessionId}`, 0, -1]]);
++        const parsed = (rows || []).map(parseJson).filter(Boolean);
++        return parsed.length ? parsed : (memoryStore.locations.get(sessionId) || []);
++      },
++      () => memoryStore.locations.get(sessionId) || []
++    );
+   },
+ 
+   getLatestLocation(sessionId) {
+-    const list = memoryStore.locations.get(sessionId) || [];
+-    return list.length > 0 ? list[list.length - 1] : null;
++    return hybrid(
++      async () => {
++        const [rows] = await redis([['LRANGE', `${K}loc:${sessionId}`, -1, -1]]);
++        const latest = parseJson(rows && rows[0]);
++        if (latest) return latest;
++        const list = memoryStore.locations.get(sessionId) || [];
++        return list.length > 0 ? list[list.length - 1] : null;
++      },
++      () => {
++        const list = memoryStore.locations.get(sessionId) || [];
++        return list.length > 0 ? list[list.length - 1] : null;
++      }
++    );
+   },
+ 
+   // Bolna Rate Limiting & Safety Rails
+   logCall({ phone, agentId, executionId, status = 'success' }) {
+     const entry = {
+-      phone: String(phone).replace(/\s+/g, ''),
++      phone: cleanPhone(phone),
+       agentId,
+       executionId,
+       status,
+@@ -62,18 +182,86 @@ export const store = {
+     };
+     memoryStore.callLog.push(entry);
+     if (memoryStore.callLog.length > 200) memoryStore.callLog.shift();
+-    return entry;
++    if (!isPersistent()) return entry;
++
++    return redis([['SET', `${K}lastcall:${entry.phone}`, JSON.stringify(entry), 'EX', 300]])
++      .then(() => entry)
++      .catch(err => {
++        console.warn('[store] logCall fallback:', err.message);
++        return entry;
++      });
+   },
+ 
+   getRecentCalls(phone, windowSeconds = 60) {
+-    const cleanPhone = String(phone).replace(/\s+/g, '');
++    const p = cleanPhone(phone);
+     const cutoff = Date.now() - (windowSeconds * 1000);
+-    return memoryStore.callLog.filter(c => c.phone === cleanPhone && c.timestamp >= cutoff);
++    const fromMemory = () => memoryStore.callLog.filter(c => c.phone === p && c.timestamp >= cutoff);
++    return hybrid(
++      async () => {
++        const [raw] = await redis([['GET', `${K}lastcall:${p}`]]);
++        const last = parseJson(raw);
++        const recent = last && last.timestamp >= cutoff ? [last] : [];
++        return recent.length ? recent : fromMemory();
++      },
++      fromMemory
++    );
+   },
+ 
+   // Call Cooldown Check: Enforces >= 20 seconds between calls to same number
+   isCallRateLimited(phone, cooldownSeconds = 20) {
+     const recent = this.getRecentCalls(phone, cooldownSeconds);
++    if (recent && typeof recent.then === 'function') {
++      return recent.then(list => list.length > 0);
++    }
+     return recent.length > 0;
++  },
++
++  /**
++   * Generic cooldown gate for non-call channels (Telegram / WhatsApp relays).
++   * Returns true if the action is allowed (and records it), false if still cooling down.
++   */
++  tryAcquire(key, cooldownSeconds = 20) {
++    const memTry = () => {
++      const last = memoryStore.marks.get(key) || 0;
++      if (Date.now() - last < cooldownSeconds * 1000) return false;
++      memoryStore.marks.set(key, Date.now());
++      return true;
++    };
++    if (!isPersistent()) return memTry();
++
++    return redis([['SET', `${K}mark:${key}`, '1', 'NX', 'EX', cooldownSeconds]])
++      .then(([result]) => result === 'OK')
++      .catch(err => {
++        console.warn('[store] tryAcquire fallback:', err.message);
++        return memTry();
++      });
++  },
++
++  // Bolna webhook results (keyed by execution id)
++  saveCallResult(executionId, result) {
++    if (!executionId) return null;
++    const entry = { ...result, executionId, savedAt: Date.now() };
++    memoryStore.callResults.set(executionId, entry);
++    if (memoryStore.callResults.size > 200) {
++      memoryStore.callResults.delete(memoryStore.callResults.keys().next().value);
++    }
++    if (!isPersistent()) return entry;
++
++    return redis([['SET', `${K}exec:${executionId}`, JSON.stringify(entry), 'EX', TTL_CALL_RESULT_SECONDS]])
++      .then(() => entry)
++      .catch(err => {
++        console.warn('[store] saveCallResult fallback:', err.message);
++        return entry;
++      });
++  },
++
++  getCallResult(executionId) {
++    return hybrid(
++      async () => {
++        const [raw] = await redis([['GET', `${K}exec:${executionId}`]]);
++        return parseJson(raw) || memoryStore.callResults.get(executionId) || null;
++      },
++      () => memoryStore.callResults.get(executionId) || null
++    );
+   }
+ };
+diff --git a/api/bolna/call.js b/api/bolna/call.js
+index fca5df4..656e99c 100644
+--- a/api/bolna/call.js
++++ b/api/bolna/call.js
+@@ -13,24 +13,8 @@
+  * - Input validation: Strict phone number format and agent ID checks
+  */
+ 
+-import fs from 'node:fs';
+-import path from 'node:path';
+ import { store } from '../_store.js';
+-
+-function getEnv(key, fallback = '') {
+-  if (process.env[key]) return process.env[key];
+-  try {
+-    const envPath = path.resolve(process.cwd(), '.env.local');
+-    if (fs.existsSync(envPath)) {
+-      const content = fs.readFileSync(envPath, 'utf8');
+-      const match = content.match(new RegExp(`^${key}=(.+)$`, 'm'));
+-      if (match) return match[1].trim().replace(/^["']|["']$/g, '');
+-    }
+-  } catch {
+-    // ignore
+-  }
+-  return fallback;
+-}
++import { getEnv } from '../_env.js';
+ 
+ const BOLNA_API_URL = 'https://api.bolna.ai/call';
+ const DEFAULT_CHECKIN_AGENT = getEnv('BOLNA_CHECKIN_AGENT_ID', '0885f542-dbc4-48c6-9780-fe1107c659ea');
+@@ -57,6 +41,7 @@ export default async function handler(req, res) {
+       customAgentId,
+       recipientName = 'Rishi',
+       trackingUrl = '',
++      sessionId = '',
+       emergencyReason = 'Missed safety check-in window',
+       dryRun = false
+     } = body;
+@@ -72,7 +57,7 @@ export default async function handler(req, res) {
+     }
+ 
+     // 1. Safety Rail: Check Rate Limit (20s cooldown)
+-    if (store.isCallRateLimited(formattedPhone, 20)) {
++    if (await store.isCallRateLimited(formattedPhone, 20)) {
+       return res.status(429).json({
+         error: 'Call cooldown active. Must wait at least 20 seconds between calls to prevent loop/spam.',
+         phone: formattedPhone
+@@ -86,7 +71,7 @@ export default async function handler(req, res) {
+     // 3. Dry Run Safety Rail (Simulation without telephony spend)
+     if (dryRun || getEnv('BOLNA_DRY_RUN') === 'true') {
+       const mockExecutionId = `dryrun-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+-      store.logCall({ phone: formattedPhone, agentId, executionId: mockExecutionId, status: 'dry_run' });
++      await store.logCall({ phone: formattedPhone, agentId, executionId: mockExecutionId, status: 'dry_run' });
+       return res.status(200).json({
+         success: true,
+         dryRun: true,
+@@ -109,6 +94,7 @@ export default async function handler(req, res) {
+         tracking_url: trackingUrl || 'https://astraea-safety.vercel.app',
+         emergency_reason: emergencyReason,
+         call_type: callType,
++        session_id: sessionId,
+         timestamp: new Date().toISOString()
+       }
+     };
+@@ -126,7 +112,7 @@ export default async function handler(req, res) {
+     const responseData = await response.json().catch(() => ({}));
+ 
+     if (!response.ok) {
+-      store.logCall({ phone: formattedPhone, agentId, executionId: null, status: 'failed' });
++      await store.logCall({ phone: formattedPhone, agentId, executionId: null, status: 'failed' });
+       return res.status(response.status).json({
+         error: 'Bolna API rejected call dispatch',
+         statusCode: response.status,
+@@ -135,7 +121,9 @@ export default async function handler(req, res) {
+     }
+ 
+     const executionId = responseData.execution_id || responseData.call_id || `exec-${Date.now()}`;
+-    store.logCall({ phone: formattedPhone, agentId, executionId, status: 'dispatched' });
++    await store.logCall({ phone: formattedPhone, agentId, executionId, status: 'dispatched' });
++    // Remember which session/call type this execution belongs to so the webhook can update it later
++    await store.saveCallResult(executionId, { status: 'dispatched', callType, agentId, sessionId, phone: formattedPhone });
+ 
+     return res.status(200).json({
+       success: true,
+diff --git a/api/bolna/webhook.js b/api/bolna/webhook.js
+index 3071949..e6e7c8d 100644
+--- a/api/bolna/webhook.js
++++ b/api/bolna/webhook.js
+@@ -1,16 +1,36 @@
+ /**
+  * POST /api/bolna/webhook
+- * 
+- * Webhook receiver for Bolna AI Call Lifecycle & Transcription Events.
+- * Processes call termination, transcripts, and structured extractions (e.g. user response).
++ *
++ * Webhook receiver for Bolna AI call lifecycle & transcript events.
++ * Configure it on BOTH Bolna agents (Check-In and Emergency Alert):
++ *   https://<your-domain>/api/bolna/webhook?secret=<BOLNA_WEBHOOK_SECRET>
++ *
++ * What it does:
++ * - Optionally authenticates the request with BOLNA_WEBHOOK_SECRET (query `secret`
++ *   or `x-webhook-secret` header). If the env var is unset, requests are accepted.
++ * - Analyses ONLY the callee's side of the transcript (see api/_callAnalysis.js).
++ * - Stores the processed result keyed by execution id and, when the call can be
++ *   linked to a session, records a call summary on that session.
++ * - Never auto-stands-down an SOS: a spoken "I'm safe" on a phone call can be
++ *   coerced, so the safe-word flow in the app remains the only way to stand down.
++ * - Transcripts are stored privately (truncated) and never exposed by /api/track.
+  */
+ 
++import crypto from 'node:crypto';
+ import { store } from '../_store.js';
++import { getEnv, parseBody } from '../_env.js';
++import { analyzeCall } from '../_callAnalysis.js';
++
++function secretMatches(provided, expected) {
++  const a = Buffer.from(String(provided || ''));
++  const b = Buffer.from(String(expected));
++  return a.length === b.length && crypto.timingSafeEqual(a, b);
++}
+ 
+ export default async function handler(req, res) {
+   res.setHeader('Access-Control-Allow-Origin', '*');
+   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
++  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Webhook-Secret');
+ 
+   if (req.method === 'OPTIONS') {
+     return res.status(200).end();
+@@ -20,44 +40,92 @@ export default async function handler(req, res) {
+     return res.status(405).json({ error: 'Method not allowed' });
+   }
+ 
++  const expectedSecret = getEnv('BOLNA_WEBHOOK_SECRET');
++  if (expectedSecret) {
++    const provided = (req.query && req.query.secret) || (req.headers && req.headers['x-webhook-secret']);
++    if (!secretMatches(provided, expectedSecret)) {
++      return res.status(401).json({ error: 'Invalid webhook secret' });
++    }
++  }
++
+   try {
+-    const payload = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+-    
+-    // Bolna webhook structures commonly contain:
+-    // event, execution_id, agent_id, status, transcript, extractions, user_data
+-    const {
+-      execution_id,
+-      agent_id,
+-      status,
+-      transcript,
+-      extractions,
+-      user_data,
+-      call_duration
+-    } = payload;
+-
+-    console.log(`[BOLNA WEBHOOK] Execution: ${execution_id} | Status: ${status}`);
+-
+-    // If call completed, inspect transcript or extraction for safe-word or distress
+-    let analyzedStatus = 'PENDING';
+-    if (status === 'completed' || status === 'done') {
+-      analyzedStatus = 'CALL_COMPLETED';
+-      
+-      const transcriptText = (typeof transcript === 'string' ? transcript : JSON.stringify(transcript || '')).toLowerCase();
+-      
+-      // Check if user confirmed safety in the call
+-      if (transcriptText.includes('safe') || transcriptText.includes('fine') || transcriptText.includes('ok')) {
+-        analyzedStatus = 'USER_CONFIRMED_SAFE';
+-      } else if (transcriptText.includes('help') || transcriptText.includes('bachao') || transcriptText.includes('danger')) {
+-        analyzedStatus = 'USER_CONFIRMED_DURESS';
+-      }
++    const payload = parseBody(req);
++
++    // Bolna payloads commonly contain: id/execution_id, agent_id, status, transcript,
++    // extracted_data, user_data / context_details.recipient_data, conversation_time
++    const executionId = payload.execution_id || payload.id || null;
++    const agentId = payload.agent_id || null;
++    const status = payload.status;
++    const callDuration = payload.call_duration ?? payload.conversation_time ?? payload.conversation_duration ?? 0;
++    const userData = payload.user_data || payload.context_details?.recipient_data || {};
++
++    console.log(`[BOLNA WEBHOOK] Execution: ${executionId} | Status: ${status}`);
++
++    // Link back to what we dispatched (call type + session), falling back to payload hints
++    const dispatched = executionId ? await store.getCallResult(executionId) : null;
++    const alertAgentId = getEnv('BOLNA_ALERT_AGENT_ID', 'f2a46049-af9e-4ef3-8021-d42c665046c3');
++    const callType =
++      dispatched?.callType ||
++      userData.call_type ||
++      (agentId && agentId === alertAgentId ? 'alert' : 'checkin');
++    const sessionId = dispatched?.sessionId || userData.session_id || '';
++
++    const analysis = analyzeCall(payload, callType);
++
++    // Do not let a late "in progress" event overwrite an already-final result
++    if (!analysis.terminal && dispatched?.terminal) {
++      return res.status(200).json({
++        received: true,
++        executionId,
++        agentId,
++        callType,
++        analyzedStatus: dispatched.analyzedStatus,
++        duration: dispatched.duration || 0,
++        timestamp: Date.now()
++      });
++    }
++
++    const transcriptText = typeof payload.transcript === 'string'
++      ? payload.transcript
++      : JSON.stringify(payload.transcript || '');
++
++    if (executionId) {
++      await store.saveCallResult(executionId, {
++        ...(dispatched || {}),
++        callType,
++        agentId,
++        sessionId,
++        status: String(status || ''),
++        analyzedStatus: analysis.analyzedStatus,
++        contactResponse: analysis.contactResponse,
++        contactAcknowledged: analysis.contactAcknowledged,
++        terminal: analysis.terminal,
++        duration: callDuration,
++        transcript: transcriptText.slice(0, 4000)
++      });
++    }
++
++    if (sessionId && analysis.terminal) {
++      const summary = {
++        executionId,
++        callType,
++        analyzedStatus: analysis.analyzedStatus,
++        at: Date.now()
++      };
++      await store.createOrUpdateSession(sessionId, {
++        lastCall: summary,
++        ...(callType === 'alert' && analysis.contactAcknowledged ? { contactAcknowledged: true } : {})
++      });
+     }
+ 
+     return res.status(200).json({
+       received: true,
+-      executionId: execution_id,
+-      agentId: agent_id,
+-      analyzedStatus,
+-      duration: call_duration || 0,
++      executionId,
++      agentId,
++      callType,
++      analyzedStatus: analysis.analyzedStatus,
++      contactResponse: analysis.contactResponse,
++      duration: callDuration,
+       timestamp: Date.now()
+     });
+   } catch (err) {
+diff --git a/api/dispatch/telegram.js b/api/dispatch/telegram.js
+new file mode 100644
+index 0000000..ea1cae8
+--- /dev/null
++++ b/api/dispatch/telegram.js
+@@ -0,0 +1,53 @@
++/**
++ * POST /api/dispatch/telegram
++ * Body: { messageText }
++ *
++ * Server-side Telegram relay that uses TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID from the
++ * environment, so the bot token never has to live in the browser. The client calls this
++ * when the user has not entered their own Telegram credentials in Settings.
++ *
++ * Abuse guard: max 1 message per 10 seconds, text capped at 1500 characters.
++ */
++
++import { store } from '../_store.js';
++import { getEnv, parseBody } from '../_env.js';
++
++export default async function handler(req, res) {
++  res.setHeader('Access-Control-Allow-Origin', '*');
++  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
++  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
++
++  if (req.method === 'OPTIONS') return res.status(200).end();
++  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
++
++  try {
++    const { messageText } = parseBody(req);
++    if (!messageText || typeof messageText !== 'string') {
++      return res.status(400).json({ success: false, error: 'messageText is required' });
++    }
++
++    const botToken = getEnv('TELEGRAM_BOT_TOKEN');
++    const chatId = getEnv('TELEGRAM_CHAT_ID');
++    if (!botToken || !chatId) {
++      return res.status(503).json({ success: false, configured: false, error: 'Telegram is not configured on the server' });
++    }
++
++    if (!(await store.tryAcquire('telegram', 10))) {
++      return res.status(429).json({ success: false, error: 'Telegram relay cooldown active (10s)' });
++    }
++
++    const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ chat_id: chatId, text: messageText.slice(0, 1500) })
++    });
++    const data = await tgRes.json().catch(() => ({}));
++
++    if (!data.ok) {
++      return res.status(502).json({ success: false, error: data.description || `Telegram HTTP ${tgRes.status}` });
++    }
++    return res.status(200).json({ success: true, gateway: 'telegram' });
++  } catch (err) {
++    return res.status(500).json({ success: false, error: err.message });
++  }
++}
+diff --git a/api/dispatch/whatsapp.js b/api/dispatch/whatsapp.js
+new file mode 100644
+index 0000000..c627c34
+--- /dev/null
++++ b/api/dispatch/whatsapp.js
+@@ -0,0 +1,92 @@
++/**
++ * POST /api/dispatch/whatsapp
++ * Body: { phone, messageText }
++ *
++ * Server-side WhatsApp relay using credentials from the environment:
++ *   - CallMeBot (free):  CALLMEBOT_API_KEY
++ *   - Twilio WhatsApp:   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER
++ *                        (falls back to TWILIO_PHONE_NUMBER)
++ * CallMeBot is preferred when its key is set.
++ *
++ * Abuse guards (the endpoint is public, the credentials are yours):
++ *   - recipient must be listed in VERIFIED_PHONE_NUMBERS (empty list => nothing is sent)
++ *   - max 1 message per recipient per 10 seconds, text capped at 1000 characters
++ *
++ * Unlike the browser's no-cors CallMeBot call, this reads the real gateway response,
++ * so failures (bad API key, unregistered number) are reported instead of hidden.
++ */
++
++import { store } from '../_store.js';
++import { getEnv, getVerifiedPhones, normalizePhone, parseBody } from '../_env.js';
++
++async function sendViaCallMeBot({ phone, text, apiKey }) {
++  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(apiKey)}`;
++  const res = await fetch(url);
++  const body = await res.text().catch(() => '');
++  const ok = res.ok && /queued|sent/i.test(body) && !/error|invalid/i.test(body);
++  return { ok, status: res.status, detail: body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) };
++}
++
++async function sendViaTwilio({ phone, text, accountSid, authToken, from }) {
++  const wa = n => (n.startsWith('whatsapp:') ? n : `whatsapp:${n}`);
++  const form = new URLSearchParams({ To: wa(phone), From: wa(from), Body: text });
++  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
++    method: 'POST',
++    headers: {
++      Authorization: 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
++      'Content-Type': 'application/x-www-form-urlencoded'
++    },
++    body: form.toString()
++  });
++  const data = await res.json().catch(() => ({}));
++  return { ok: res.ok, status: res.status, detail: data.message || data.status || '' };
++}
++
++export default async function handler(req, res) {
++  res.setHeader('Access-Control-Allow-Origin', '*');
++  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
++  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
++
++  if (req.method === 'OPTIONS') return res.status(200).end();
++  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
++
++  try {
++    const body = parseBody(req);
++    const phone = normalizePhone(body.phone);
++    const messageText = body.messageText;
++
++    if (!phone || !messageText || typeof messageText !== 'string') {
++      return res.status(400).json({ success: false, error: 'phone and messageText are required' });
++    }
++
++    const callMeBotKey = getEnv('CALLMEBOT_API_KEY');
++    const twilioSid = getEnv('TWILIO_ACCOUNT_SID');
++    const twilioToken = getEnv('TWILIO_AUTH_TOKEN');
++    const twilioFrom = getEnv('TWILIO_WHATSAPP_NUMBER') || getEnv('TWILIO_PHONE_NUMBER');
++    const twilioReady = Boolean(twilioSid && twilioToken && twilioFrom);
++
++    if (!callMeBotKey && !twilioReady) {
++      return res.status(503).json({ success: false, configured: false, error: 'No WhatsApp gateway is configured on the server' });
++    }
++
++    if (!getVerifiedPhones().includes(phone)) {
++      return res.status(403).json({ success: false, error: 'Recipient is not in VERIFIED_PHONE_NUMBERS' });
++    }
++
++    if (!(await store.tryAcquire(`whatsapp:${phone}`, 10))) {
++      return res.status(429).json({ success: false, error: 'WhatsApp relay cooldown active (10s)' });
++    }
++
++    const text = messageText.slice(0, 1000);
++    const result = callMeBotKey
++      ? await sendViaCallMeBot({ phone, text, apiKey: callMeBotKey })
++      : await sendViaTwilio({ phone, text, accountSid: twilioSid, authToken: twilioToken, from: twilioFrom });
++
++    if (!result.ok) {
++      return res.status(502).json({ success: false, gateway: callMeBotKey ? 'callmebot' : 'twilio', error: result.detail || `Gateway HTTP ${result.status}` });
++    }
++    return res.status(200).json({ success: true, gateway: callMeBotKey ? 'callmebot' : 'twilio', detail: result.detail });
++  } catch (err) {
++    return res.status(500).json({ success: false, error: err.message });
++  }
++}
+diff --git a/api/location.js b/api/location.js
+index c900fcf..a488f69 100644
+--- a/api/location.js
++++ b/api/location.js
+@@ -21,8 +21,8 @@ export default async function handler(req, res) {
+     if (!sessionId) {
+       return res.status(400).json({ error: 'sessionId required' });
+     }
+-    const latest = store.getLatestLocation(sessionId);
+-    const history = store.getLocations(sessionId);
++    const latest = await store.getLatestLocation(sessionId);
++    const history = await store.getLocations(sessionId);
+     return res.status(200).json({ success: true, latest, count: history.length });
+   }
+ 
+@@ -35,7 +35,7 @@ export default async function handler(req, res) {
+         return res.status(400).json({ error: 'sessionId, latitude, and longitude are required' });
+       }
+ 
+-      const recorded = store.addLocation(sessionId, {
++      const recorded = await store.addLocation(sessionId, {
+         latitude: Number(latitude),
+         longitude: Number(longitude),
+         speed: Number(speed),
+diff --git a/api/session.js b/api/session.js
+index 99a8946..347d242 100644
+--- a/api/session.js
++++ b/api/session.js
+@@ -22,7 +22,7 @@ export default async function handler(req, res) {
+     if (!sessionId) {
+       return res.status(400).json({ error: 'sessionId query parameter required' });
+     }
+-    const session = store.getSession(sessionId);
++    const session = await store.getSession(sessionId);
+     if (!session) {
+       return res.status(404).json({ error: 'Session not found' });
+     }
+@@ -38,7 +38,7 @@ export default async function handler(req, res) {
+         return res.status(400).json({ error: 'Missing sessionId in request body' });
+       }
+ 
+-      const session = store.createOrUpdateSession(sessionId, {
++      const session = await store.createOrUpdateSession(sessionId, {
+         userName: userName || 'Astraea User',
+         destination: destination || null,
+         status,
+diff --git a/api/track.js b/api/track.js
+index 177f727..271d740 100644
+--- a/api/track.js
++++ b/api/track.js
+@@ -25,9 +25,9 @@ export default async function handler(req, res) {
+     return res.status(400).json({ error: 'Tracking ID is required' });
+   }
+ 
+-  const session = store.getSession(id);
+-  const locations = store.getLocations(id);
+-  const latestLocation = store.getLatestLocation(id);
++  const session = await store.getSession(id);
++  const locations = await store.getLocations(id);
++  const latestLocation = await store.getLatestLocation(id);
+ 
+   if (!session && locations.length === 0) {
+     return res.status(404).json({ error: 'Tracking link expired or not found' });
+@@ -60,6 +60,7 @@ export default async function handler(req, res) {
+       longitude: loc.longitude,
+       timestamp: loc.recordedAt
+     })),
++    contactAcknowledged: Boolean(session?.contactAcknowledged),
+     trustedContacts: sanitizedContacts
+   });
+ }
+diff --git a/package.json b/package.json
+index 261f9e2..6fb9f36 100644
+--- a/package.json
++++ b/package.json
+@@ -7,7 +7,7 @@
+     "dev": "vite",
+     "build": "vite build",
+     "lint": "oxlint",
+-    "test": "node src/signals/signals.test.js && node src/engine/pipeline.test.js && node src/engine/riskScore.test-scenarios.js && node tests/branch2.test.js && node tests/branch3.test.js && node tests/branch4.test.js",
++    "test": "node src/signals/signals.test.js && node src/engine/pipeline.test.js && node src/engine/riskScore.test-scenarios.js && node tests/branch2.test.js && node tests/branch3.test.js && node tests/branch4.test.js && node tests/branch5.test.js",
+     "preview": "vite preview"
+   },
+   "dependencies": {
+diff --git a/src/components/TrustedCircleManager.jsx b/src/components/TrustedCircleManager.jsx
+index c736158..9743ba4 100644
+--- a/src/components/TrustedCircleManager.jsx
++++ b/src/components/TrustedCircleManager.jsx
+@@ -61,15 +61,12 @@ export default function TrustedCircleManager() {
+   };
+ 
+   const handleTestTelegram = async () => {
+-    if (!inputTelegram.botToken || !inputTelegram.chatId) {
+-      setTelegramTestStatus({ ok: false, msg: 'Please enter Bot Token & Chat ID' });
+-      return;
+-    }
++    // Empty fields => test the server's default bot (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)
+     setTelegramTestStatus({ ok: true, msg: 'Calling Telegram API...' });
+     const res = await sendTelegramAlert({
+       botToken: inputTelegram.botToken,
+       chatId: inputTelegram.chatId,
+-      messageText: '🚨 <b>ASTRAEA TEST DISPATCH</b>\nLive integration verified with Telegram Bot REST API!'
++      messageText: '🚨 ASTRAEA TEST DISPATCH\nLive integration verified with Telegram Bot REST API!'
+     });
+     if (res.success) {
+       setTelegramTestStatus({ ok: true, msg: '✓ Message received on Telegram!' });
+@@ -238,7 +235,7 @@ export default function TrustedCircleManager() {
+             </label>
+           </div>
+           <p className="webhook-hint">
+-            Astraea sends real-time emergency notifications directly to your phone via Telegram Bot API (<code>api.telegram.org</code>).
++            Astraea sends real-time emergency notifications directly to your phone via Telegram Bot API (<code>api.telegram.org</code>). Leave both fields blank to use the server's default bot (<code>TELEGRAM_BOT_TOKEN</code> / <code>TELEGRAM_CHAT_ID</code>).
+           </p>
+           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+             <input
+diff --git a/src/engine/deliveryService.js b/src/engine/deliveryService.js
+index 827e3c6..333dfb6 100644
+--- a/src/engine/deliveryService.js
++++ b/src/engine/deliveryService.js
+@@ -150,8 +150,10 @@ export async function postToCustomWebhook(webhookUrl, payload) {
+  * Sends emergency alert via official Telegram Bot API (REST HTTP request)
+  */
+ export async function sendTelegramAlert({ botToken, chatId, messageText }) {
++  // No credentials supplied in the app -> use the server relay, which reads
++  // TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID from the deployment environment.
+   if (!botToken || !chatId) {
+-    return { success: false, error: 'Telegram credentials missing' };
++    return relayToServer('/api/dispatch/telegram', { messageText }, 'Telegram credentials missing');
+   }
+ 
+   try {
+@@ -171,6 +173,29 @@ export async function sendTelegramAlert({ botToken, chatId, messageText }) {
+   }
+ }
+ 
++/**
++ * Calls one of Astraea's own serverless relay endpoints (/api/dispatch/*).
++ * Never throws; returns { success, error }.
++ */
++async function relayToServer(endpoint, body, notConfiguredMessage) {
++  try {
++    const res = await fetch(endpoint, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify(body)
++    });
++    const data = await res.json().catch(() => ({}));
++    if (res.ok && data.success) return { success: true, gateway: data.gateway, via: 'server' };
++    return {
++      success: false,
++      via: 'server',
++      error: data.configured === false ? notConfiguredMessage : (data.error || `Relay returned ${res.status}`)
++    };
++  } catch (err) {
++    return { success: false, error: err.message };
++  }
++}
++
+ /**
+  * Sends direct automated WhatsApp alert via Cloud REST Gateway (Twilio / CallMeBot / Meta Cloud)
+  * Does NOT require user interaction or opening the WhatsApp app.
+@@ -194,8 +219,9 @@ export async function sendDirectWhatsAppAlert({
+       // CallMeBot Free WhatsApp API: Sends direct automated WhatsApp message
+       const cleanPhone = phone.replace(/[^0-9+]/g, '');
+       const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(cleanPhone)}&text=${encodeURIComponent(messageText)}&apikey=${encodeURIComponent(apiKey)}`;
++      // no-cors => opaque response: we can only confirm the request was sent, not that CallMeBot accepted it
+       await fetch(url, { method: 'GET', mode: 'no-cors' });
+-      return { success: true, gateway: 'callmebot' };
++      return { success: true, unverified: true, gateway: 'callmebot' };
+     }
+ 
+     if (gatewayType === 'twilio' && accountSid && authToken && fromNumber) {
+@@ -235,6 +261,10 @@ export async function sendDirectWhatsAppAlert({
+       return { success: res.ok, status: res.status };
+     }
+ 
++    // Nothing configured in the app: use the server relay (CALLMEBOT_API_KEY / Twilio env vars)
++    if (phone) {
++      return relayToServer('/api/dispatch/whatsapp', { phone, messageText }, 'No automated WhatsApp gateway credentials configured');
++    }
+     return { success: false, error: 'No automated WhatsApp gateway credentials configured' };
+   } catch (err) {
+     return { success: false, error: err.message };
+@@ -267,21 +297,27 @@ export function dispatchEmergencyToCircle({
+       chatId: telegramConfig.chatId,
+       messageText: payload.messageText
+     });
++  } else {
++    // Server-side default (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID); no-op if not configured
++    sendTelegramAlert({ messageText: payload.messageText });
+   }
+ 
+-  // Automated Direct WhatsApp Dispatch to each circle contact with a phone number
+-  if (whatsappConfig && whatsappConfig.enabled && activeContacts.length > 0) {
++  // Automated Direct WhatsApp Dispatch to each circle contact with a phone number.
++  // With no in-app gateway configured, sendDirectWhatsAppAlert uses the server relay
++  // (only delivers to numbers in VERIFIED_PHONE_NUMBERS).
++  if (activeContacts.length > 0) {
++    const wa = whatsappConfig && whatsappConfig.enabled ? whatsappConfig : {};
+     activeContacts.forEach(contact => {
+       if (contact.phone) {
+         sendDirectWhatsAppAlert({
+           phone: contact.phone,
+           messageText: payload.messageText,
+-          gatewayType: whatsappConfig.gatewayType,
+-          apiKey: whatsappConfig.apiKey,
+-          accountSid: whatsappConfig.accountSid,
+-          authToken: whatsappConfig.authToken,
+-          fromNumber: whatsappConfig.fromNumber,
+-          endpointUrl: whatsappConfig.endpointUrl
++          gatewayType: wa.gatewayType,
++          apiKey: wa.apiKey,
++          accountSid: wa.accountSid,
++          authToken: wa.authToken,
++          fromNumber: wa.fromNumber,
++          endpointUrl: wa.endpointUrl
+         });
+       }
+     });
+diff --git a/src/services/apiClient.js b/src/services/apiClient.js
+index d28ff55..507de33 100644
+--- a/src/services/apiClient.js
++++ b/src/services/apiClient.js
+@@ -72,6 +72,7 @@ export const apiClient = {
+     callType = 'checkin', // 'checkin' | 'alert'
+     recipientName = 'Rishi',
+     trackingUrl = '',
++    sessionId = '',
+     emergencyReason = 'Missed safety check-in window',
+     dryRun = false
+   }) {
+@@ -84,6 +85,7 @@ export const apiClient = {
+           callType,
+           recipientName,
+           trackingUrl,
++          sessionId,
+           emergencyReason,
+           dryRun
+         })
+diff --git a/src/state/AppContext.jsx b/src/state/AppContext.jsx
+index 5db1b13..59d959b 100644
+--- a/src/state/AppContext.jsx
++++ b/src/state/AppContext.jsx
+@@ -375,6 +375,26 @@ export function AppProvider({ children }) {
+       }
+     });
+ 
++    // Back the public tracking link (/track/<sosSessionId>) with real data. Fire-and-forget:
++    // apiClient swallows network errors so this can never block the emergency flow.
++    const sosSessionId = `sos-${now}`;
++    apiClient.syncSession({
++      sessionId: sosSessionId,
++      userName: 'Astraea User',
++      status: 'SOS_ACTIVE',
++      tier: 'CRITICAL',
++      circleContacts: mode === 'Connected' ? (trustedCircle || []) : []
++    });
++    if (geoSignals.coordinates) {
++      apiClient.streamLocation({
++        sessionId: sosSessionId,
++        latitude: geoSignals.coordinates.latitude,
++        longitude: geoSignals.coordinates.longitude,
++        accuracy: geoSignals.coordinates.accuracy,
++        riskTier: 'CRITICAL'
++      });
++    }
++
+     // Trigger Outbound AI Call to Primary Emergency Contact via Bolna
+     const primaryContact = (trustedCircle || []).find(c => c.phone);
+     if (primaryContact && primaryContact.phone) {
+@@ -382,7 +402,8 @@ export function AppProvider({ children }) {
+         phoneNumber: primaryContact.phone,
+         callType: 'alert',
+         recipientName: primaryContact.name || 'Emergency Contact',
+-        trackingUrl: `https://astraea-safety.vercel.app/track/sos-${now}`,
++        trackingUrl: `${typeof window !== 'undefined' ? window.location.origin : 'https://astraea-safety.vercel.app'}/track/${sosSessionId}`,
++        sessionId: sosSessionId,
+         emergencyReason: reasonText,
+         dryRun: false
+       }).catch(err => {
+diff --git a/tests/branch5.test.js b/tests/branch5.test.js
+new file mode 100644
+index 0000000..034f878
+--- /dev/null
++++ b/tests/branch5.test.js
+@@ -0,0 +1,305 @@
++/**
++ * Astraea - Branch 5 Test Suite (Remaining work: relays, webhook, persistent store)
++ *
++ * Unlike the older suites this one uses node:assert, so any failure exits non-zero.
++ * No real network calls are made: global fetch is replaced with an in-process fake
++ * (including a tiny fake Upstash Redis REST server).
++ */
++
++import assert from 'node:assert/strict';
++
++const realFetch = globalThis.fetch;
++const calls = [];
++let handlers = [];
++
++globalThis.fetch = async (url, init = {}) => {
++  calls.push({ url: String(url), init });
++  for (const h of handlers) {
++    const out = await h(String(url), init);
++    if (out) return out;
++  }
++  throw new Error(`Unexpected fetch in test: ${url}`);
++};
++
++const jsonRes = (data, status = 200) => ({
++  ok: status >= 200 && status < 300,
++  status,
++  json: async () => data,
++  text: async () => JSON.stringify(data)
++});
++const textRes = (text, status = 200) => ({
++  ok: status >= 200 && status < 300,
++  status,
++  json: async () => JSON.parse(text),
++  text: async () => text
++});
++
++function mockReqRes(method, body = {}, query = {}, headers = {}) {
++  const req = { method, body, query, headers };
++  const out = { statusCode: 200, data: null };
++  const res = {
++    setHeader() {},
++    status(c) { out.statusCode = c; return res; },
++    json(d) { out.data = d; return res; },
++    end() { return res; }
++  };
++  return { req, res, out };
++}
++
++// ---------------------------------------------------------------------------
++console.log('\n[TEST 1: Transcript analysis (callee-only, distress wins)]');
++const {
++  extractCalleeText, classifySafety, classifyContactResponse, analyzeCall, mapCallStatus
++} = await import('../api/_callAnalysis.js');
++
++assert.equal(classifySafety('Yes I am completely safe and reached home.'), 'SAFE');
++assert.equal(classifySafety('Help me please someone is following me'), 'DURESS');
++assert.equal(classifySafety("I'm safe but please help"), 'DURESS', 'distress must beat reassurance');
++assert.equal(classifySafety('I am not safe'), 'DURESS');
++assert.equal(classifySafety("I'm fine, no need for help"), 'SAFE', '"no need for help" is neutralised');
++assert.equal(classifySafety('main theek hoon'), 'SAFE');
++assert.equal(classifySafety('bachao'), 'DURESS');
++assert.equal(classifySafety('I will book a cab'), 'NONE', '"book" must not match "ok"');
++assert.equal(classifySafety(''), 'NONE');
++
++const labelled = 'assistant: Hello, are you safe? Please say your safe word.\nuser: umm\nassistant: Are you okay?\nuser: help';
++assert.equal(extractCalleeText(labelled).trim(), 'umm help');
++const agentOnly = 'assistant: Are you safe? Are you okay and fine?\nassistant: Hello?';
++assert.equal(extractCalleeText(agentOnly).trim(), '', 'agent script alone must never count as a user answer');
++assert.equal(analyzeCall({ status: 'completed', transcript: agentOnly }, 'checkin').analyzedStatus, 'CALL_UNANSWERED');
++assert.equal(
++  analyzeCall({ status: 'completed', transcript: [{ role: 'assistant', content: 'Are you safe?' }, { role: 'user', content: "I'm okay" }] }, 'checkin').analyzedStatus,
++  'USER_CONFIRMED_SAFE'
++);
++assert.equal(classifyContactResponse("Okay I'm on my way"), 'WILL_ASSIST');
++assert.equal(classifyContactResponse('yes understood'), 'ACKNOWLEDGED');
++assert.equal(classifyContactResponse('sorry wrong number'), 'DECLINED');
++assert.equal(classifyContactResponse(''), 'NO_RESPONSE');
++assert.equal(mapCallStatus('no-answer'), 'UNREACHED');
++assert.equal(mapCallStatus('call-disconnected'), 'ENDED');
++assert.equal(mapCallStatus('in-progress'), 'IN_PROGRESS');
++assert.equal(analyzeCall({ status: 'busy' }, 'alert').analyzedStatus, 'CALL_UNANSWERED');
++assert.equal(analyzeCall({ status: 'ringing' }, 'alert').terminal, false);
++console.log('✓ Test 1 Passed');
++
++// ---------------------------------------------------------------------------
++console.log('\n[TEST 2: Webhook links calls to sessions, auth, no auto stand-down]');
++const { store } = await import('../api/_store.js');
++const callHandler = (await import('../api/bolna/call.js')).default;
++const webhook = (await import('../api/bolna/webhook.js')).default;
++const trackHandler = (await import('../api/track.js')).default;
++
++// Dispatch (dry run) is recorded; use the real record path via saveCallResult directly for linkage
++await store.createOrUpdateSession('sos-777', { userName: 'Tester', status: 'SOS_ACTIVE', tier: 'CRITICAL', circleContacts: [] });
++await store.saveCallResult('exec-alert-1', { status: 'dispatched', callType: 'alert', sessionId: 'sos-777' });
++
++let r = mockReqRes('POST', { execution_id: 'exec-alert-1', status: 'completed', transcript: 'assistant: Rishi may be in danger.\nuser: ok I am on my way' });
++await webhook(r.req, r.res);
++assert.equal(r.out.statusCode, 200);
++assert.equal(r.out.data.callType, 'alert');
++assert.equal(r.out.data.analyzedStatus, 'CONTACT_WILL_ASSIST');
++const sess = await store.getSession('sos-777');
++assert.equal(sess.contactAcknowledged, true);
++assert.equal(sess.lastCall.analyzedStatus, 'CONTACT_WILL_ASSIST');
++assert.equal(sess.status, 'SOS_ACTIVE', 'webhook must never stand an SOS down');
++
++// A late in-progress event must not overwrite the final result
++r = mockReqRes('POST', { execution_id: 'exec-alert-1', status: 'in-progress' });
++await webhook(r.req, r.res);
++assert.equal(r.out.data.analyzedStatus, 'CONTACT_WILL_ASSIST');
++
++// Public tracking exposes the acknowledgement flag but never the transcript
++r = mockReqRes('GET', {}, { id: 'sos-777' });
++await trackHandler(r.req, r.res);
++assert.equal(r.out.data.contactAcknowledged, true);
++assert.ok(!JSON.stringify(r.out.data).includes('on my way'), 'transcript must not leak to /api/track');
++
++// Secret enforcement
++process.env.BOLNA_WEBHOOK_SECRET = 's3cret';
++r = mockReqRes('POST', { execution_id: 'x', status: 'completed' });
++await webhook(r.req, r.res);
++assert.equal(r.out.statusCode, 401);
++r = mockReqRes('POST', { execution_id: 'x', status: 'completed', transcript: 'fine' }, { secret: 's3cret' });
++await webhook(r.req, r.res);
++assert.equal(r.out.statusCode, 200);
++delete process.env.BOLNA_WEBHOOK_SECRET;
++
++// call.js records the session link (dry run path doesn't hit Bolna)
++r = mockReqRes('POST', { phoneNumber: '+919000000001', dryRun: true, sessionId: 'sos-1' });
++await callHandler(r.req, r.res);
++assert.equal(r.out.data.dryRun, true);
++console.log('✓ Test 2 Passed');
++
++// ---------------------------------------------------------------------------
++console.log('\n[TEST 3: Telegram relay]');
++const telegram = (await import('../api/dispatch/telegram.js')).default;
++
++r = mockReqRes('POST', {});
++await telegram(r.req, r.res);
++assert.equal(r.out.statusCode, 400);
++
++r = mockReqRes('POST', { messageText: 'hi' });
++await telegram(r.req, r.res);
++assert.equal(r.out.statusCode, 503, 'unconfigured server must say so');
++assert.equal(r.out.data.configured, false);
++
++process.env.TELEGRAM_BOT_TOKEN = '123:ABC';
++process.env.TELEGRAM_CHAT_ID = '999';
++handlers = [(url) => url === 'https://api.telegram.org/bot123:ABC/sendMessage'
++  ? jsonRes({ ok: true, result: {} }) : null];
++r = mockReqRes('POST', { messageText: 'x'.repeat(5000) });
++await telegram(r.req, r.res);
++assert.equal(r.out.statusCode, 200);
++const sent = JSON.parse(calls.at(-1).init.body);
++assert.equal(sent.chat_id, '999');
++assert.equal(sent.text.length, 1500, 'text is capped');
++
++r = mockReqRes('POST', { messageText: 'again' });
++await telegram(r.req, r.res);
++assert.equal(r.out.statusCode, 429, 'cooldown blocks rapid repeats');
++
++delete process.env.TELEGRAM_BOT_TOKEN;
++delete process.env.TELEGRAM_CHAT_ID;
++console.log('✓ Test 3 Passed');
++
++// ---------------------------------------------------------------------------
++console.log('\n[TEST 4: WhatsApp relay]');
++const whatsapp = (await import('../api/dispatch/whatsapp.js')).default;
++
++r = mockReqRes('POST', { phone: '+919035653251', messageText: 'hi' });
++await whatsapp(r.req, r.res);
++assert.equal(r.out.statusCode, 503);
++
++process.env.CALLMEBOT_API_KEY = 'cmb-key';
++r = mockReqRes('POST', { phone: '+919035653251', messageText: 'hi' });
++await whatsapp(r.req, r.res);
++assert.equal(r.out.statusCode, 403, 'empty VERIFIED_PHONE_NUMBERS must not send');
++
++process.env.VERIFIED_PHONE_NUMBERS = '+919035653251, +911111111111';
++r = mockReqRes('POST', { phone: '+910000000000', messageText: 'hi' });
++await whatsapp(r.req, r.res);
++assert.equal(r.out.statusCode, 403, 'unverified recipient blocked');
++
++handlers = [(url) => url.startsWith('https://api.callmebot.com/whatsapp.php')
++  ? textRes('<b>Message queued.</b> You will receive it in a few seconds.') : null];
++r = mockReqRes('POST', { phone: '91 90356 53251', messageText: 'sos' });
++await whatsapp(r.req, r.res);
++assert.equal(r.out.statusCode, 200);
++assert.equal(r.out.data.gateway, 'callmebot');
++assert.ok(calls.at(-1).url.includes('apikey=cmb-key'));
++assert.ok(calls.at(-1).url.includes('phone=%2B919035653251'));
++
++handlers = [(url) => url.startsWith('https://api.callmebot.com/')
++  ? textRes('ERROR: APIKey is invalid') : null];
++r = mockReqRes('POST', { phone: '+911111111111', messageText: 'sos' });
++await whatsapp(r.req, r.res);
++assert.equal(r.out.statusCode, 502, 'gateway-reported failures are surfaced, not hidden');
++
++delete process.env.CALLMEBOT_API_KEY;
++delete process.env.VERIFIED_PHONE_NUMBERS;
++console.log('✓ Test 4 Passed');
++
++// ---------------------------------------------------------------------------
++console.log('\n[TEST 5: Persistent store over Upstash REST (fake server)]');
++const db = new Map();
++const lists = new Map();
++const exp = new Map();
++const redisFake = (url, init) => {
++  if (!url.startsWith('https://fake-redis.test/pipeline')) return null;
++  assert.equal(init.headers.Authorization, 'Bearer tok');
++  const cmds = JSON.parse(init.body);
++  const results = cmds.map(([cmd, key, ...args]) => {
++    switch (cmd) {
++      case 'GET': return { result: db.get(key) ?? null };
++      case 'SET': {
++        if (args.includes('NX') && db.has(key)) return { result: null };
++        db.set(key, args[0]);
++        return { result: 'OK' };
++      }
++      case 'RPUSH': { const l = lists.get(key) || []; l.push(args[0]); lists.set(key, l); return { result: l.length }; }
++      case 'LTRIM': { const l = lists.get(key) || []; const keep = args[0] < 0 ? l.slice(args[0]) : l.slice(args[0]); lists.set(key, keep); return { result: 'OK' }; }
++      case 'EXPIRE': exp.set(key, args[0]); return { result: 1 };
++      case 'LRANGE': {
++        const l = lists.get(key) || [];
++        const [a, b] = args;
++        const start = a < 0 ? Math.max(l.length + a, 0) : a;
++        const end = b < 0 ? l.length + b : b;
++        return { result: l.slice(start, end + 1) };
++      }
++      default: return { error: `unknown ${cmd}` };
++    }
++  });
++  return jsonRes(results);
++};
++
++process.env.UPSTASH_REDIS_REST_URL = 'https://fake-redis.test';
++process.env.UPSTASH_REDIS_REST_TOKEN = 'tok';
++handlers = [redisFake];
++const { isPersistent } = await import('../api/_store.js');
++assert.equal(isPersistent(), true);
++
++await store.createOrUpdateSession('persist-1', { userName: 'A', tier: 'LOW' });
++await store.createOrUpdateSession('persist-1', { tier: 'HIGH' });
++const ps = await store.getSession('persist-1');
++assert.equal(ps.userName, 'A');
++assert.equal(ps.tier, 'HIGH', 'second write merges over the first');
++assert.ok(db.has('astraea:session:persist-1'), 'session really went to Redis');
++
++// Simulate a cold start on another instance: nothing in memory, data still in Redis
++db.set('astraea:session:cold-1', JSON.stringify({ sessionId: 'cold-1', userName: 'Cold' }));
++assert.equal((await store.getSession('cold-1')).userName, 'Cold');
++
++await store.addLocation('persist-1', { latitude: 1, longitude: 2 });
++await store.addLocation('persist-1', { latitude: 3, longitude: 4 });
++assert.equal((await store.getLocations('persist-1')).length, 2);
++assert.equal((await store.getLatestLocation('persist-1')).latitude, 3);
++
++await store.logCall({ phone: '+919999999999', agentId: 'a', executionId: 'e' });
++assert.equal(await store.isCallRateLimited('+919999999999', 20), true);
++assert.equal(await store.isCallRateLimited('+918888888888', 20), false);
++
++assert.equal(await store.tryAcquire('k1', 10), true);
++assert.equal(await store.tryAcquire('k1', 10), false, 'NX key blocks the second acquire');
++
++// Redis outage -> graceful in-memory fallback (never throws into the emergency flow)
++handlers = [() => { throw new Error('network down'); }];
++const warn = console.warn; console.warn = () => {};
++const fb = await store.createOrUpdateSession('outage-1', { userName: 'Fallback' });
++assert.equal(fb.userName, 'Fallback');
++assert.equal((await store.getSession('outage-1')).userName, 'Fallback');
++console.warn = warn;
++
++delete process.env.UPSTASH_REDIS_REST_URL;
++delete process.env.UPSTASH_REDIS_REST_TOKEN;
++assert.equal(isPersistent(), false);
++console.log('✓ Test 5 Passed');
++
++// ---------------------------------------------------------------------------
++console.log('\n[TEST 6: Client delivery service uses server relays as fallback]');
++const { sendTelegramAlert, sendDirectWhatsAppAlert } = await import('../src/engine/deliveryService.js');
++
++handlers = [(url) => url === '/api/dispatch/telegram' ? jsonRes({ success: true, gateway: 'telegram' }) : null];
++let t = await sendTelegramAlert({ messageText: 'sos' });
++assert.equal(t.success, true);
++assert.equal(t.via, 'server');
++
++handlers = [(url) => url === '/api/dispatch/telegram' ? jsonRes({ success: false, configured: false }, 503) : null];
++t = await sendTelegramAlert({ messageText: 'sos' });
++assert.equal(t.success, false);
++assert.match(t.error, /credentials missing/i);
++
++handlers = [(url) => url === '/api/dispatch/whatsapp' ? jsonRes({ success: true, gateway: 'callmebot' }) : null];
++let w = await sendDirectWhatsAppAlert({ phone: '+919035653251', messageText: 'sos' });
++assert.equal(w.success, true);
++assert.equal(w.via, 'server');
++
++handlers = [(url) => url.startsWith('https://api.callmebot.com/') ? { ok: true, status: 0 } : null];
++w = await sendDirectWhatsAppAlert({ phone: '+919035653251', messageText: 'sos', gatewayType: 'callmebot', apiKey: 'k' });
++assert.equal(w.success, true);
++assert.equal(w.unverified, true, 'no-cors CallMeBot result is flagged as unverified');
++console.log('✓ Test 6 Passed');
++
++globalThis.fetch = realFetch;
++console.log('\n' + '='.repeat(80));
++console.log('ALL BRANCH 5 TESTS PASSED SUCCESSFULLY');
++console.log('='.repeat(80));
+diff --git a/vercel.json b/vercel.json
+index 8ac2013..a20eb8f 100644
+--- a/vercel.json
++++ b/vercel.json
+@@ -3,7 +3,7 @@
+   "cleanUrls": true,
+   "rewrites": [
+     {
+-      "source": "/(.*)",
++      "source": "/((?!api/).*)",
+       "destination": "/index.html"
+     }
+   ],

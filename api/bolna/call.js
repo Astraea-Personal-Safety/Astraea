@@ -13,24 +13,8 @@
  * - Input validation: Strict phone number format and agent ID checks
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
 import { store } from '../_store.js';
-
-function getEnv(key, fallback = '') {
-  if (process.env[key]) return process.env[key];
-  try {
-    const envPath = path.resolve(process.cwd(), '.env.local');
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf8');
-      const match = content.match(new RegExp(`^${key}=(.+)$`, 'm'));
-      if (match) return match[1].trim().replace(/^["']|["']$/g, '');
-    }
-  } catch {
-    // ignore
-  }
-  return fallback;
-}
+import { getEnv } from '../_env.js';
 
 const BOLNA_API_URL = 'https://api.bolna.ai/call';
 const DEFAULT_CHECKIN_AGENT = getEnv('BOLNA_CHECKIN_AGENT_ID', '0885f542-dbc4-48c6-9780-fe1107c659ea');
@@ -57,6 +41,7 @@ export default async function handler(req, res) {
       customAgentId,
       recipientName = 'Rishi',
       trackingUrl = '',
+      sessionId = '',
       emergencyReason = 'Missed safety check-in window',
       dryRun = false
     } = body;
@@ -72,7 +57,7 @@ export default async function handler(req, res) {
     }
 
     // 1. Safety Rail: Check Rate Limit (20s cooldown)
-    if (store.isCallRateLimited(formattedPhone, 20)) {
+    if (await store.isCallRateLimited(formattedPhone, 20)) {
       return res.status(429).json({
         error: 'Call cooldown active. Must wait at least 20 seconds between calls to prevent loop/spam.',
         phone: formattedPhone
@@ -86,7 +71,7 @@ export default async function handler(req, res) {
     // 3. Dry Run Safety Rail (Simulation without telephony spend)
     if (dryRun || getEnv('BOLNA_DRY_RUN') === 'true') {
       const mockExecutionId = `dryrun-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      store.logCall({ phone: formattedPhone, agentId, executionId: mockExecutionId, status: 'dry_run' });
+      await store.logCall({ phone: formattedPhone, agentId, executionId: mockExecutionId, status: 'dry_run' });
       return res.status(200).json({
         success: true,
         dryRun: true,
@@ -109,6 +94,7 @@ export default async function handler(req, res) {
         tracking_url: trackingUrl || 'https://astraea-safety.vercel.app',
         emergency_reason: emergencyReason,
         call_type: callType,
+        session_id: sessionId,
         timestamp: new Date().toISOString()
       }
     };
@@ -126,7 +112,7 @@ export default async function handler(req, res) {
     const responseData = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      store.logCall({ phone: formattedPhone, agentId, executionId: null, status: 'failed' });
+      await store.logCall({ phone: formattedPhone, agentId, executionId: null, status: 'failed' });
       return res.status(response.status).json({
         error: 'Bolna API rejected call dispatch',
         statusCode: response.status,
@@ -135,7 +121,9 @@ export default async function handler(req, res) {
     }
 
     const executionId = responseData.execution_id || responseData.call_id || `exec-${Date.now()}`;
-    store.logCall({ phone: formattedPhone, agentId, executionId, status: 'dispatched' });
+    await store.logCall({ phone: formattedPhone, agentId, executionId, status: 'dispatched' });
+    // Remember which session/call type this execution belongs to so the webhook can update it later
+    await store.saveCallResult(executionId, { status: 'dispatched', callType, agentId, sessionId, phone: formattedPhone });
 
     return res.status(200).json({
       success: true,

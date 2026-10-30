@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId query parameter required' });
     }
-    const session = store.getSession(sessionId);
+    const session = await store.getSession(sessionId);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing sessionId in request body' });
       }
 
-      const session = store.createOrUpdateSession(sessionId, {
+      const session = await store.createOrUpdateSession(sessionId, {
         userName: userName || 'Astraea User',
         destination: destination || null,
         status,

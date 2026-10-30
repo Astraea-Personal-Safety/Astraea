@@ -150,8 +150,10 @@ export async function postToCustomWebhook(webhookUrl, payload) {
  * Sends emergency alert via official Telegram Bot API (REST HTTP request)
  */
 export async function sendTelegramAlert({ botToken, chatId, messageText }) {
+  // No credentials supplied in the app -> use the server relay, which reads
+  // TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID from the deployment environment.
   if (!botToken || !chatId) {
-    return { success: false, error: 'Telegram credentials missing' };
+    return relayToServer('/api/dispatch/telegram', { messageText }, 'Telegram credentials missing');
   }
 
   try {
@@ -166,6 +168,29 @@ export async function sendTelegramAlert({ botToken, chatId, messageText }) {
     });
     const data = await res.json();
     return { success: data.ok, data, error: data.description };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Calls one of Astraea's own serverless relay endpoints (/api/dispatch/*).
+ * Never throws; returns { success, error }.
+ */
+async function relayToServer(endpoint, body, notConfiguredMessage) {
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) return { success: true, gateway: data.gateway, via: 'server' };
+    return {
+      success: false,
+      via: 'server',
+      error: data.configured === false ? notConfiguredMessage : (data.error || `Relay returned ${res.status}`)
+    };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -194,8 +219,9 @@ export async function sendDirectWhatsAppAlert({
       // CallMeBot Free WhatsApp API: Sends direct automated WhatsApp message
       const cleanPhone = phone.replace(/[^0-9+]/g, '');
       const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(cleanPhone)}&text=${encodeURIComponent(messageText)}&apikey=${encodeURIComponent(apiKey)}`;
+      // no-cors => opaque response: we can only confirm the request was sent, not that CallMeBot accepted it
       await fetch(url, { method: 'GET', mode: 'no-cors' });
-      return { success: true, gateway: 'callmebot' };
+      return { success: true, unverified: true, gateway: 'callmebot' };
     }
 
     if (gatewayType === 'twilio' && accountSid && authToken && fromNumber) {
@@ -235,6 +261,10 @@ export async function sendDirectWhatsAppAlert({
       return { success: res.ok, status: res.status };
     }
 
+    // Nothing configured in the app: use the server relay (CALLMEBOT_API_KEY / Twilio env vars)
+    if (phone) {
+      return relayToServer('/api/dispatch/whatsapp', { phone, messageText }, 'No automated WhatsApp gateway credentials configured');
+    }
     return { success: false, error: 'No automated WhatsApp gateway credentials configured' };
   } catch (err) {
     return { success: false, error: err.message };
@@ -267,21 +297,27 @@ export function dispatchEmergencyToCircle({
       chatId: telegramConfig.chatId,
       messageText: payload.messageText
     });
+  } else {
+    // Server-side default (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID); no-op if not configured
+    sendTelegramAlert({ messageText: payload.messageText });
   }
 
-  // Automated Direct WhatsApp Dispatch to each circle contact with a phone number
-  if (whatsappConfig && whatsappConfig.enabled && activeContacts.length > 0) {
+  // Automated Direct WhatsApp Dispatch to each circle contact with a phone number.
+  // With no in-app gateway configured, sendDirectWhatsAppAlert uses the server relay
+  // (only delivers to numbers in VERIFIED_PHONE_NUMBERS).
+  if (activeContacts.length > 0) {
+    const wa = whatsappConfig && whatsappConfig.enabled ? whatsappConfig : {};
     activeContacts.forEach(contact => {
       if (contact.phone) {
         sendDirectWhatsAppAlert({
           phone: contact.phone,
           messageText: payload.messageText,
-          gatewayType: whatsappConfig.gatewayType,
-          apiKey: whatsappConfig.apiKey,
-          accountSid: whatsappConfig.accountSid,
-          authToken: whatsappConfig.authToken,
-          fromNumber: whatsappConfig.fromNumber,
-          endpointUrl: whatsappConfig.endpointUrl
+          gatewayType: wa.gatewayType,
+          apiKey: wa.apiKey,
+          accountSid: wa.accountSid,
+          authToken: wa.authToken,
+          fromNumber: wa.fromNumber,
+          endpointUrl: wa.endpointUrl
         });
       }
     });

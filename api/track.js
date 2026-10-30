@@ -25,9 +25,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Tracking ID is required' });
   }
 
-  const session = store.getSession(id);
-  const locations = store.getLocations(id);
-  const latestLocation = store.getLatestLocation(id);
+  const session = await store.getSession(id);
+  const locations = await store.getLocations(id);
+  const latestLocation = await store.getLatestLocation(id);
 
   if (!session && locations.length === 0) {
     return res.status(404).json({ error: 'Tracking link expired or not found' });
@@ -60,6 +60,7 @@ export default async function handler(req, res) {
       longitude: loc.longitude,
       timestamp: loc.recordedAt
     })),
+    contactAcknowledged: Boolean(session?.contactAcknowledged),
     trustedContacts: sanitizedContacts
   });
 }
