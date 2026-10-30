@@ -96,7 +96,7 @@ flowchart TD
 
 ### 2. Setup
 ```bash
-git clone https://github.com/CherukuriRishi/Astraea.git
+git clone https://github.com/Astraea-Personal-Safety/Astraea.git
 cd Astraea
 npm install
 ```
