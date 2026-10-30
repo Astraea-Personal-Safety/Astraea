@@ -79,7 +79,7 @@ export const storage = {
 
   isOnboarded: () => {
     try {
-      return localStorage.getItem(STORAGE_KEYS.ONBOARDED) === 'true' === 'true';
+      return localStorage.getItem(STORAGE_KEYS.ONBOARDED) === 'true';
     } catch {
       return false;
     }

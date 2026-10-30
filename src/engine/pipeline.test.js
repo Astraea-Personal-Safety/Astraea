@@ -45,6 +45,7 @@ storage.setWhatsAppConfig({ enabled: true, gatewayType: 'callmebot', apiKey: 'ke
 storage.setGeminiApiKey('AIzaSyExample');
 
 console.assert(storage.getSafeWord() === 'ASTRAEA', 'Safe word match');
+console.assert(storage.isOnboarded() === true, 'Onboarded flag must be true');
 console.assert(storage.getDuressWord() === 'BLUE SKY', 'Duress word match');
 console.assert(storage.getMode() === 'Connected', 'Mode match');
 console.assert(storage.getTrustedCircle().length === 2, 'Circle length match');
@@ -55,6 +56,7 @@ console.assert(storage.getGeminiApiKey() === 'AIzaSyExample', 'Gemini API key ma
 // Verify Complete Data Purge
 storage.resetOnboarding();
 console.assert(storage.getSafeWord() === '', 'Safe word cleared');
+console.assert(storage.isOnboarded() === false, 'Onboarded flag cleared');
 console.assert(storage.getDuressWord() === '', 'Duress word cleared');
 console.assert(storage.getTelegramConfig().botToken === '', 'Telegram config purged');
 console.assert(storage.getWhatsAppConfig().apiKey === '', 'WhatsApp config purged');

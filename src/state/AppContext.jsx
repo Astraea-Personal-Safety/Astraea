@@ -527,13 +527,14 @@ export function AppProvider({ children }) {
   }, [getCircleNames, dispatchCircleNotification, addTimelineEvent]);
 
   // Manual or Voice Triggered Check-In
+  const speechEngineRef = useRef(null);
   const triggerSafetyCheckIn = useCallback((reason = 'Voice safety trigger detected') => {
     if (isSOSActive || checkInState !== 'idle') return;
     setCheckInState('prompting');
     setCurrentAttempt(1);
     setCountdown(CHECKIN_RESPONSE_WINDOW_SECONDS);
-    if (privacySettings.ttsVoiceEnabled) {
-      speechEngine.speakText('Astraea safety check-in: Are you safe? Speak or type your safe phrase.');
+    if (privacySettings.ttsVoiceEnabled && speechEngineRef.current) {
+      speechEngineRef.current.speakText('Astraea safety check-in: Are you safe? Speak or type your safe phrase.');
     }
     if (privacySettings.hapticsEnabled && typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([100, 50, 100]);
@@ -544,7 +545,7 @@ export function AppProvider({ children }) {
       title: '🛡️ Voice-Triggered Check-In Initiated',
       description: reason
     });
-  }, [isSOSActive, checkInState, privacySettings, speechEngine, addTimelineEvent]);
+  }, [isSOSActive, checkInState, privacySettings, addTimelineEvent]);
 
   // Speech Engine Integration
   const speechEngine = useSpeechInteraction({
@@ -561,9 +562,12 @@ export function AppProvider({ children }) {
     onEndJourney: () => endJourney(),
     onStatusRequest: () => {
       const text = `Current risk score is ${riskAssessment.score} out of 100, which is ${riskAssessment.tier} risk. ${riskAssessment.contributingFactors.length} factors contributing.`;
-      speechEngine.speakText(text);
+      speechEngineRef.current?.speakText(text);
     }
   });
+  useEffect(() => {
+    speechEngineRef.current = speechEngine;
+  }, [speechEngine]);
 
   // Settings & Storage Updaters
   const setMode = useCallback((newMode) => {
