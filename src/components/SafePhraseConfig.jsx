@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../state/useApp';
+import { SpeakerEnrollmentModal } from './SpeakerEnrollmentModal.jsx';
 import './SafePhraseConfig.css';
 
 export default function SafePhraseConfig({ onInterceptSave = null }) {
@@ -17,6 +18,7 @@ export default function SafePhraseConfig({ onInterceptSave = null }) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [testSpeechText, setTestSpeechText] = useState('');
   const [testResult, setTestResult] = useState(null);
+  const [showVoiceEnrollment, setShowVoiceEnrollment] = useState(false);
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -135,6 +137,49 @@ export default function SafePhraseConfig({ onInterceptSave = null }) {
           </button>
         </div>
       </form>
+
+      {/* On-Device Biometric Voice Verification Card */}
+      <div className="voice-biometric-enroll-card" style={{
+        marginTop: '1.25rem',
+        padding: '1rem',
+        background: 'rgba(56, 189, 248, 0.05)',
+        border: '1px solid rgba(56, 189, 248, 0.2)',
+        borderRadius: '12px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '1rem',
+        flexWrap: 'wrap'
+      }}>
+        <div>
+          <h5 style={{ margin: 0, color: '#38bdf8', fontSize: '0.9rem', fontWeight: 600 }}>🎙️ Biometric Voice Verification</h5>
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+            Train on-device acoustic model so Astraea recognizes your authentic voice during safe phrase de-escalation.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowVoiceEnrollment(true)}
+          style={{
+            background: 'rgba(56, 189, 248, 0.15)',
+            border: '1px solid #38bdf8',
+            color: '#38bdf8',
+            borderRadius: '8px',
+            padding: '0.5rem 0.9rem',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            cursor: 'pointer'
+          }}
+        >
+          Train Voice Profile
+        </button>
+      </div>
+
+      <SpeakerEnrollmentModal
+        safePhrase={inputSafe || 'ASTRAEA'}
+        isOpen={showVoiceEnrollment}
+        onClose={() => setShowVoiceEnrollment(false)}
+      />
 
       {/* Interactive Speech & Verification Tester */}
       <div className="phrase-tester-box">

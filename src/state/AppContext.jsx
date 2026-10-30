@@ -14,6 +14,8 @@ import { useSpeechInteraction, matchPhrase } from '../signals/useSpeechInteracti
 import { explainRiskAssessment, interpretSafetyCommand, fetchGeminiSafetyAnalysis } from '../engine/aiReasoning';
 import { buildEmergencyPayload, dispatchEmergencyToCircle, sendBrowserNotification } from '../engine/deliveryService';
 import { sirenSynth } from '../engine/sirenSynth';
+import { useSpeakerVerification } from '../signals/useSpeakerVerification.js';
+import { apiClient } from '../services/apiClient.js';
 
 export { CHECKIN_RESPONSE_WINDOW_SECONDS, CHECKIN_MAX_ATTEMPTS, CHECKIN_RETRY_INTERVAL_SECONDS };
 
@@ -89,6 +91,7 @@ export function AppProvider({ children }) {
   const deviceMotionSignal = useDeviceMotionSignal({ enabled: privacySettings.motionSensorEnabled });
   const audioDistressSignal = useAudioDistressSignal({ enabled: privacySettings.micDistressEnabled });
   const networkSignal = useNetworkSignal();
+  const speakerVerifier = useSpeakerVerification();
 
   // 5. Live Journey State
   const [journey, setJourney] = useState({
@@ -358,6 +361,21 @@ export function AppProvider({ children }) {
       }
     });
 
+    // Trigger Outbound AI Call to Primary Emergency Contact via Bolna
+    const primaryContact = (trustedCircle || []).find(c => c.phone);
+    if (primaryContact && primaryContact.phone) {
+      apiClient.triggerBolnaCall({
+        phoneNumber: primaryContact.phone,
+        callType: 'alert',
+        recipientName: primaryContact.name || 'Emergency Contact',
+        trackingUrl: `https://astraea-safety.vercel.app/track/sos-${now}`,
+        emergencyReason: reasonText,
+        dryRun: false
+      }).catch(err => {
+        console.warn('Bolna call dispatch:', err.message);
+      });
+    }
+
     // Log timeline event
     addTimelineEvent({
       category: 'SOS',
@@ -424,8 +442,31 @@ export function AppProvider({ children }) {
   }, [safeWord, effectiveSignals, mode, getCircleNames, dispatchCircleNotification, addTimelineEvent]);
 
   // Submit Check-In
-  const submitCheckIn = useCallback((inputText) => {
+  const submitCheckIn = useCallback((inputText, options = {}) => {
     const trimmedInput = inputText.trim();
+
+    // 0. Biometric Speaker Verification Coercion Check
+    // If the words match but speaker acoustics deviate significantly, trigger silent alert
+    if (options.speakerMismatch) {
+      lastUpdatedRef.current = Date.now();
+      setCheckInState('resolved');
+      setCheckInFeedback({ type: 'success', message: 'Safe word verified • Alert stood down' });
+      checkInCooldownUntilRef.current = Date.now() + 120000;
+
+      addTimelineEvent({
+        category: 'SOS',
+        title: '⚠️ Biometric Speaker Mismatch Detected',
+        description: 'Safe word text matched, but acoustic voice verification failed (potential coercion or non-user speaker). Silent alert dispatched.'
+      });
+
+      triggerSOS('coercion_voice_mismatch', { silent: true });
+
+      setTimeout(() => {
+        setCheckInState('idle');
+        setCheckInFeedback(null);
+      }, 4000);
+      return { success: true, covert: true, reason: 'voice_mismatch' };
+    }
 
     // 1. Covert Duress Word Verification
     if (duressWord && matchPhrase(trimmedInput, duressWord)) {
@@ -547,6 +588,24 @@ export function AppProvider({ children }) {
     });
   }, [isSOSActive, checkInState, privacySettings, addTimelineEvent]);
 
+  // Active Check-In Biometric Voice Sampling
+  useEffect(() => {
+    if (checkInState !== 'prompting' || !speakerVerifier.isEnrolled) {
+      return;
+    }
+    let sampleTimer = null;
+    speakerVerifier.startCapture().then(started => {
+      if (started) {
+        sampleTimer = setInterval(() => {
+          speakerVerifier.sampleFrame();
+        }, 100);
+      }
+    });
+    return () => {
+      if (sampleTimer) clearInterval(sampleTimer);
+    };
+  }, [checkInState, speakerVerifier]);
+
   // Speech Engine Integration
   const speechEngine = useSpeechInteraction({
     safeWord,
@@ -556,7 +615,14 @@ export function AppProvider({ children }) {
     ttsEnabled: privacySettings.ttsVoiceEnabled,
     sttEnabled: privacySettings.sttVoiceCommandsEnabled,
     onVoiceSOS: (reason, opts) => triggerSOS(reason, opts || { silent: reason === 'coercion_wrong_word' }),
-    onSubmitCheckIn: (phrase) => submitCheckIn(phrase),
+    onSubmitCheckIn: (phrase) => {
+      const liveVec = speakerVerifier.isEnrolled ? speakerVerifier.stopCapture() : null;
+      const verResult = speakerVerifier.verifySpokenAudio(liveVec);
+      submitCheckIn(phrase, {
+        speakerMismatch: speakerVerifier.isEnrolled && !verResult.verified,
+        similarityScore: verResult.score
+      });
+    },
     onTriggerCheckIn: () => triggerSafetyCheckIn(),
     onStartJourney: (lbl) => startJourney(lbl),
     onEndJourney: () => endJourney(),
@@ -884,6 +950,7 @@ export function AppProvider({ children }) {
     audioDistressSignal,
     networkSignal,
     speechEngine,
+    speakerVerifier,
     signalSourcesMeta,
 
     // 2b. External Cloud API Integrations
