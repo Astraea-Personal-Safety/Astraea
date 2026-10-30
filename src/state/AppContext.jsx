@@ -16,6 +16,7 @@ import { buildEmergencyPayload, dispatchEmergencyToCircle, sendBrowserNotificati
 import { sirenSynth } from '../engine/sirenSynth';
 import { useSpeakerVerification } from '../signals/useSpeakerVerification.js';
 import { apiClient } from '../services/apiClient.js';
+import { useOverpassRiskSignal } from '../signals/useOverpassRiskSignal.js';
 
 export { CHECKIN_RESPONSE_WINDOW_SECONDS, CHECKIN_MAX_ATTEMPTS, CHECKIN_RETRY_INTERVAL_SECONDS };
 
@@ -125,6 +126,13 @@ export function AppProvider({ children }) {
   }, []);
   const [manualOverrideMode, setManualOverrideMode] = useState(false);
 
+  // Real OpenStreetMap Overpass Environmental Risk Signal
+  const overpassSignal = useOverpassRiskSignal(
+    geoSignals?.coordinates?.latitude,
+    geoSignals?.coordinates?.longitude,
+    !manualOverrideMode && !isDevMode
+  );
+
   const lastUpdatedRef = useRef(0);
   const prevScoreRef = useRef(0);
   const prevTierRef = useRef('LOW');
@@ -165,8 +173,10 @@ export function AppProvider({ children }) {
       // Stillness: dev/manual override if active, else real GPS stillness if active, else manual fallback
       stillnessSeconds: override ? manualSignals.stillnessSeconds : (geoSignals.isGeolocationActive ? geoSignals.stillnessSeconds : manualSignals.stillnessSeconds),
       
-      // Crowd Density: Manual simulation
-      crowdDensity: manualSignals.crowdDensity,
+      // Crowd Density: OSM Overpass API if queried and not overridden, else manual fallback
+      crowdDensity: override
+        ? manualSignals.crowdDensity
+        : (overpassSignal?.lastQueriedAt ? overpassSignal.crowdDensity : manualSignals.crowdDensity),
       
       // Time of Day: dev/manual override if provided, else real browser clock
       timeOfDay: override ? (manualSignals.timeOfDay || timeSignal.timeOfDay) : timeSignal.timeOfDay,
@@ -214,7 +224,9 @@ export function AppProvider({ children }) {
     audioDistressSignal.distressDetected,
     deviceMotionSignal.impactDetected,
     networkSignal.isOnline,
-    journey.isActive
+    journey.isActive,
+    overpassSignal?.lastQueriedAt,
+    overpassSignal?.crowdDensity
   ]);
 
   // Telemetry metadata
@@ -252,9 +264,11 @@ export function AppProvider({ children }) {
         fallbackReason: batterySignal.fallbackReason
       },
       crowdDensity: {
-        isReal: false,
-        source: 'Manual Simulation Only',
-        displayVal: manualSignals.crowdDensity
+        isReal: Boolean(overpassSignal?.lastQueriedAt),
+        source: overpassSignal?.lastQueriedAt ? 'Real OSM Overpass API' : 'Manual Simulation Only',
+        displayVal: overpassSignal?.lastQueriedAt
+          ? `${overpassSignal.crowdDensity} (${overpassSignal.amenityCount} amenities nearby)`
+          : manualSignals.crowdDensity
       },
       deviceMotion: {
         isReal: deviceMotionSignal.motionSupported,
@@ -267,7 +281,7 @@ export function AppProvider({ children }) {
         displayVal: `${audioDistressSignal.volumeDb} dB (Scream: ${Math.round(audioDistressSignal.screamRatio * 100)}%)`
       }
     };
-  }, [timeSignal, batterySignal, geoSignals, manualSignals, familiarPlaces.length, deviceMotionSignal, audioDistressSignal]);
+  }, [timeSignal, batterySignal, geoSignals, manualSignals, familiarPlaces.length, deviceMotionSignal, audioDistressSignal, overpassSignal]);
 
   // Risk Assessment
   const [riskAssessment, setRiskAssessment] = useState(() => calculateRiskScore(effectiveSignals, 0, 0));
@@ -951,6 +965,7 @@ export function AppProvider({ children }) {
     networkSignal,
     speechEngine,
     speakerVerifier,
+    overpassSignal,
     signalSourcesMeta,
 
     // 2b. External Cloud API Integrations

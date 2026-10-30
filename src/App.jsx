@@ -14,6 +14,7 @@ import AccessibilityControls from './components/AccessibilityControls';
 import SecurityVault from './components/SecurityVault';
 import VoiceAssistantBar from './components/VoiceAssistantBar';
 import SOSButton from './components/SOSButton';
+import { PublicTrackingView } from './components/PublicTrackingView.jsx';
 import './App.css';
 
 function MainAppContent() {
@@ -40,6 +41,17 @@ function MainAppContent() {
   const [showDevModal, setShowDevModal] = useState(false);
   const [showQuickPresets, setShowQuickPresets] = useState(false);
   const [fakeCallTriggered, setFakeCallTriggered] = useState(false);
+
+  // Check if current view is public tracking link
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const pathTrackId = typeof window !== 'undefined' && window.location.pathname.startsWith('/track/')
+    ? window.location.pathname.split('/track/')[1]
+    : null;
+  const publicTrackId = searchParams?.get('track') || pathTrackId;
+
+  if (publicTrackId) {
+    return <PublicTrackingView trackingId={publicTrackId} />;
+  }
 
   // Quick preset scenarios for instant judge testing in ?dev=1
   const DEMO_PRESETS = [

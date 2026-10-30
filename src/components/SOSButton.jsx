@@ -245,6 +245,45 @@ export default function SOSButton() {
               </div>
             )}
 
+            {/* Outbound Bolna AI Call & Primary Contact Direct Dial */}
+            {trustedCircle && trustedCircle.length > 0 && trustedCircle[0].phone && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                borderRadius: '12px',
+                padding: '0.85rem 1rem',
+                margin: '0.75rem 0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.75rem',
+                flexWrap: 'wrap'
+              }}>
+                <div>
+                  <span style={{ fontSize: '0.68rem', color: '#fca5a5', textTransform: 'uppercase', fontWeight: 700, display: 'block', letterSpacing: '0.04em' }}>
+                    🤖 BOLNA AI DISPATCH ACTIVE
+                  </span>
+                  <div style={{ color: '#ffffff', fontSize: '0.92rem', fontWeight: 600, marginTop: '0.15rem' }}>
+                    Calling {trustedCircle[0].name} ({trustedCircle[0].phone})
+                  </div>
+                </div>
+                <a
+                  href={`tel:${trustedCircle[0].phone}`}
+                  style={{
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    padding: '0.55rem 0.95rem',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    textDecoration: 'none'
+                  }}
+                >
+                  Direct Call ↗
+                </a>
+              </div>
+            )}
+
             {/* Tap-to-Call Emergency Services */}
             <div className="emergency-call-section">
               <span className="call-section-title">DIRECT EMERGENCY DISPATCH</span>
