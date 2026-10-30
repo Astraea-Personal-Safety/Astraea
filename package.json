@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test": "node src/signals/signals.test.js && node src/engine/pipeline.test.js && node src/engine/riskScore.test-scenarios.js && node tests/branch2.test.js && node tests/branch3.test.js",
+    "test": "node src/signals/signals.test.js && node src/engine/pipeline.test.js && node src/engine/riskScore.test-scenarios.js && node tests/branch2.test.js && node tests/branch3.test.js && node tests/branch4.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

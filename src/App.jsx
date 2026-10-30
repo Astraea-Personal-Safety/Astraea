@@ -15,6 +15,8 @@ import SecurityVault from './components/SecurityVault';
 import VoiceAssistantBar from './components/VoiceAssistantBar';
 import SOSButton from './components/SOSButton';
 import { PublicTrackingView } from './components/PublicTrackingView.jsx';
+import { OfflineEmergencyBanner } from './components/OfflineEmergencyBanner.jsx';
+import { FakeEscapeCallModal } from './components/FakeEscapeCallModal.jsx';
 import './App.css';
 
 function MainAppContent() {
@@ -70,14 +72,19 @@ function MainAppContent() {
 
   const handleTriggerFakeCall = () => {
     setFakeCallTriggered(true);
-    setTimeout(() => {
-      alert('📞 Incoming Call from "Mom": Astraea escape call simulation active.');
-      setFakeCallTriggered(false);
-    }, 1500);
   };
 
   return (
     <div className={`app-shell ${privacySettings?.highContrast ? 'high-contrast-mode' : ''}`}>
+      {/* Offline & Critical Battery Fallback Banner */}
+      <OfflineEmergencyBanner />
+
+      {/* Realistic Phone Call Escape Simulation Modal */}
+      <FakeEscapeCallModal
+        isOpen={fakeCallTriggered}
+        onClose={() => setFakeCallTriggered(false)}
+        callerName={trustedCircle?.[0]?.name || 'Mom'}
+      />
       {/* Dev Mode Floating Trigger (?dev=1 only) */}
       {isDevMode && (
         <button

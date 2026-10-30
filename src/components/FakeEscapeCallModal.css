@@ -1,0 +1,158 @@
+.fake-call-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000000;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3rem 2rem 4rem 2rem;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, sans-serif;
+}
+
+.fake-call-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 420px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.caller-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 2rem;
+}
+
+.caller-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.caller-name {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0;
+  color: #ffffff;
+}
+
+.caller-subtitle {
+  font-size: 1.1rem;
+  color: #94a3b8;
+  margin-top: 0.35rem;
+}
+
+/* Connected Visualizer */
+.call-connected-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.voice-waves {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+}
+
+.voice-waves span {
+  width: 5px;
+  height: 15px;
+  background: #22c55e;
+  border-radius: 4px;
+  animation: wave 1s infinite ease-in-out;
+}
+
+.voice-waves span:nth-child(2) { animation-delay: 0.2s; height: 28px; }
+.voice-waves span:nth-child(3) { animation-delay: 0.4s; height: 38px; }
+.voice-waves span:nth-child(4) { animation-delay: 0.1s; height: 22px; }
+.voice-waves span:nth-child(5) { animation-delay: 0.3s; height: 16px; }
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1.3); }
+}
+
+.call-script-hint {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-style: italic;
+  text-align: center;
+  max-width: 280px;
+}
+
+/* Actions */
+.fake-call-actions {
+  width: 100%;
+}
+
+.incoming-actions-row {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+}
+
+.btn-call-decline,
+.btn-call-accept,
+.btn-call-hangup {
+  border: none;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  gap: 0.5rem;
+}
+
+.btn-call-decline .call-btn-icon,
+.btn-call-hangup .call-btn-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+}
+
+.btn-call-accept .call-btn-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #16a34a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  animation: pulse-green 1.5s infinite;
+  box-shadow: 0 4px 15px rgba(22, 163, 74, 0.4);
+}
+
+.call-btn-label {
+  font-size: 0.85rem;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+@keyframes pulse-green {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
