@@ -32,6 +32,20 @@ export default function SOSButton() {
   const [standDownInput, setStandDownInput] = useState('');
   const [standDownError, setStandDownError] = useState('');
   const [isSirenMuted, setIsSirenMuted] = useState(false);
+  const [whatsappDispatchState, setWhatsappDispatchState] = useState({ loading: false, message: '', success: false });
+
+  const alertText = emergencyPayload?.messageText || 'Emergency alert active';
+  const smsHref = `sms:?body=${encodeURIComponent(alertText)}`;
+
+  // WhatsApp click-to-chat must include the recipient number. Without it,
+  // wa.me/?text=... opens WhatsApp's generic contact picker and forces the
+  // user to search manually. WhatsApp expects country code + digits, no '+'.
+  const whatsappContact = (trustedCircle || []).find(contact => contact.phone);
+  const whatsappDigits = whatsappContact?.phone ? String(whatsappContact.phone).replace(/\D/g, '') : '';
+  const waHref = whatsappDigits
+    ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(alertText)}`
+    : null;
+
 
   const holdIntervalRef = useRef(null);
   const holdStartTimeRef = useRef(0);
@@ -83,6 +97,31 @@ export default function SOSButton() {
     }
   };
 
+  // Send the emergency message through Astraea's server-side WhatsApp gateway.
+  // wa.me links can prefill a message, but cannot send it automatically.
+  const handleWhatsAppDispatch = async () => {
+    if (!whatsappContact?.phone) {
+      setWhatsappDispatchState({ loading: false, message: 'Add a trusted contact with a phone number first.', success: false });
+      return;
+    }
+
+    setWhatsappDispatchState({ loading: true, message: 'Sending WhatsApp alert…', success: false });
+    try {
+      const response = await fetch('/api/dispatch/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: whatsappContact.phone, messageText: alertText })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || `WhatsApp gateway returned HTTP ${response.status}`);
+      }
+      setWhatsappDispatchState({ loading: false, message: `WhatsApp gateway accepted the alert for ${whatsappContact.name || whatsappContact.phone}.`, success: true });
+    } catch (error) {
+      setWhatsappDispatchState({ loading: false, message: `Automatic send failed: ${error.message}. Use “Open WhatsApp draft” as a manual backup.`, success: false });
+    }
+  };
+
   // Native share trigger
   const handleNativeShare = async () => {
     if (emergencyPayload && navigator.share) {
@@ -127,10 +166,6 @@ export default function SOSButton() {
         return 'Critical Safety Escalation';
     }
   };
-
-  const alertText = emergencyPayload?.messageText || 'Emergency alert active';
-  const smsHref = `sms:?body=${encodeURIComponent(alertText)}`;
-  const waHref = `https://wa.me/?text=${encodeURIComponent(alertText)}`;
 
   return (
     <>
@@ -209,7 +244,7 @@ export default function SOSButton() {
 
             {/* Automated Dispatch Status Banner */}
             <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.6rem 0.8rem', borderRadius: '10px', margin: '0.75rem 0', fontSize: '0.82rem', color: '#6ee7b7', textAlign: 'center' }}>
-              ✓ <strong>AUTOMATED DIRECT DISPATCH FIRED:</strong> Emergency payload dispatched to Trusted Circle via Cloud Gateway (Telegram, Direct WhatsApp & Webhook) without requiring user clicks.
+              ℹ️ <strong>AUTOMATED DISPATCH REQUESTS INITIATED:</strong> Delivery depends on configured gateways and recipient authorization; check each channel’s result before assuming the alert was delivered.
             </div>
 
             {/* Direct Dispatch & Broadcast Backup Action Links */}
@@ -220,15 +255,37 @@ export default function SOSButton() {
               <a href={smsHref} className="btn-dispatch-link link-sms" target="_blank" rel="noreferrer">
                 📱 Forward via SMS
               </a>
-              <a href={waHref} className="btn-dispatch-link link-wa" target="_blank" rel="noreferrer">
-                💬 Forward via WhatsApp
-              </a>
+              <button
+                type="button"
+                className="btn-dispatch-link link-wa"
+                onClick={handleWhatsAppDispatch}
+                disabled={!whatsappContact?.phone || whatsappDispatchState.loading}
+                title={!whatsappContact?.phone ? 'Add a trusted contact with a phone number in Settings first' : 'Send via configured server-side WhatsApp gateway'}
+              >
+                {whatsappDispatchState.loading ? '⏳ Sending WhatsApp…' : '💬 Send WhatsApp alert'}
+              </button>
+              {waHref && (
+                <a
+                  href={waHref}
+                  className="btn-dispatch-link link-wa"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open WhatsApp draft with ${whatsappContact.name || 'trusted contact'}`}
+                >
+                  Open WhatsApp draft
+                </a>
+              )}
               {typeof navigator !== 'undefined' && navigator.share && (
                 <button type="button" className="btn-dispatch-link link-share" onClick={handleNativeShare}>
                   🔗 Native Share
                 </button>
               )}
             </div>
+            {whatsappDispatchState.message && (
+              <p role="status" aria-live="polite" style={{ margin: '0.5rem 0', fontSize: '0.82rem', color: whatsappDispatchState.success ? '#6ee7b7' : '#fbbf24' }}>
+                {whatsappDispatchState.message}
+              </p>
+            )}
 
             {/* Feature 17: Emergency Delivery Status Live Tracker */}
             {deliveryRecords.length > 0 && (
